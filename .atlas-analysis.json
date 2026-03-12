@@ -1,0 +1,123 @@
+{
+  "projectType": "saas",
+  "projectName": "Visor KPI Comercial",
+  "projectDescription": "Sales intelligence dashboard that transforms Excel spreadsheets into actionable business insights for commercial teams.",
+  "theme": "sequoia",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/executive-summary",
+              "features/sales-team-view",
+              "features/individual-seller-view",
+              "features/customer-analysis",
+              "features/product-analysis",
+              "features/alerts-center"
+            ]
+          },
+          {
+            "group": "KPI Engine",
+            "pages": [
+              "kpi-engine/overview",
+              "kpi-engine/sales-metrics",
+              "kpi-engine/margin-analysis",
+              "kpi-engine/customer-coverage",
+              "kpi-engine/pareto-analysis"
+            ]
+          },
+          {
+            "group": "Alerts System",
+            "pages": [
+              "alerts/overview",
+              "alerts/alert-rules",
+              "alerts/severity-levels"
+            ]
+          },
+          {
+            "group": "Data Management",
+            "pages": [
+              "data/excel-format",
+              "data/data-loader",
+              "data/mock-data-generator"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/architecture",
+              "development/testing",
+              "development/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Modules",
+            "pages": [
+              "api/kpi-engine",
+              "api/alerts-engine",
+              "api/data-loader",
+              "api/pareto",
+              "api/reports"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "api/components/kpi-card",
+              "api/components/charts",
+              "api/components/filters",
+              "api/components/rankings"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Automated Excel-to-KPI transformation",
+    "Multi-view sales dashboard (Executive, Team, Individual)",
+    "Pareto 80/20 analysis for customers and products",
+    "Intelligent alert engine with 7 business rules",
+    "Customer portfolio segmentation and risk detection",
+    "Product rotation and opportunity analysis",
+    "Monthly performance tracking and rankings",
+    "Dark theme UI with interactive Plotly visualizations"
+  ],
+  "publicApiSurface": [
+    "kpi_ventas_periodo()",
+    "kpi_margen()",
+    "kpi_cobertura_clientes()",
+    "kpi_por_vendedor()",
+    "kpi_clientes()",
+    "kpi_productos()",
+    "kpi_evolucion_mensual()",
+    "get_alertas_activas()",
+    "calcular_pareto()",
+    "get_concentracion_pareto()",
+    "load_data()",
+    "get_filtered_data()",
+    "render_kpi_card()",
+    "chart_evolucion_ventas()",
+    "chart_gauge_cumplimiento()",
+    "render_ranking_vendedores()",
+    "generate_mock_data()"
+  ]
+}
