@@ -1,0 +1,240 @@
+---
+title: KPI Card Components
+description: Reusable KPI card components with progress bars, deltas, and traffic light indicators
+---
+
+The `kpi_card` module provides reusable card components for displaying key performance indicators with visual styling, progress tracking, and delta indicators.
+
+## Overview
+
+KPI cards use Streamlit's `st.markdown` with HTML/CSS for complete style control, including:
+- Large value display with custom formatting
+- Delta percentage with directional arrows and color coding
+- Progress bars for goal tracking
+- Traffic light color coding based on performance thresholds
+- Icon support for visual identification
+
+## Functions
+
+### render_kpi_card
+
+```python
+render_kpi_card(
+    label: str,
+    value: str,
+    delta_pct: float | None = None,
+    objetivo: str | None = None,
+    cumplimiento: float | None = None,
+    width: str = "100%",
+    icon: str = "",
+) -> None
+```
+
+Renders a complete KPI card with all features including progress bar and traffic light indicator.
+
+<ParamField path="label" type="str" required>
+  The label text for the KPI (displayed in uppercase)
+</ParamField>
+
+<ParamField path="value" type="str" required>
+  The main value to display (pre-formatted as string)
+</ParamField>
+
+<ParamField path="delta_pct" type="float | None" default="None">
+  The percentage change from previous period (as decimal, e.g., 0.15 for +15%)
+</ParamField>
+
+<ParamField path="objetivo" type="str | None" default="None">
+  The goal/target value (pre-formatted as string)
+</ParamField>
+
+<ParamField path="cumplimiento" type="float | None" default="None">
+  Achievement percentage as decimal (e.g., 0.85 for 85%). Used for progress bar and border color
+</ParamField>
+
+<ParamField path="width" type="str" default="100%">
+  CSS width value for the card
+</ParamField>
+
+<ParamField path="icon" type="str" default="">
+  Emoji or icon to display before the label
+</ParamField>
+
+#### Traffic Light Color Coding
+
+The left border color is determined by the `cumplimiento` value:
+- **Green** (success): cumplimiento ≥ 1.0 (100%+)
+- **Orange** (warning): 0.8 ≤ cumplimiento < 1.0 (80-99%)
+- **Red** (danger): cumplimiento < 0.8 (below 80%)
+- **Blue** (info): cumplimiento is None
+
+#### Delta Display
+
+The delta indicator shows:
+- **Green ▲ +X%**: Positive change (delta_pct > 0.05%)
+- **Red ▼ -X%**: Negative change (delta_pct < -0.05%)
+- **Gray —**: No significant change (-0.05% ≤ delta_pct ≤ 0.05%)
+
+#### Example Usage
+
+```python
+from components.kpi_card import render_kpi_card
+from config import fmt_moneda, fmt_pct
+
+# app.py:122-129
+render_kpi_card(
+    label        = "Ventas del Período",
+    value        = fmt_moneda(kv["importe_total"]),
+    delta_pct    = kv.get("importe_vs_anterior"),
+    objetivo     = fmt_moneda(kv.get("objetivo_total", 0)),
+    cumplimiento = kv.get("cumplimiento_pct"),
+    icon         = "💰",
+)
+```
+
+```python
+# pages/1_gerencia.py:73-75
+render_kpi_card(
+    "Vendedores en verde", 
+    str(n_verde),
+    cumplimiento=n_verde/12 if n_verde else 0, 
+    icon="🟢"
+)
+```
+
+---
+
+### render_kpi_card_simple
+
+```python
+render_kpi_card_simple(
+    label: str,
+    value: str,
+    delta_pct: float | None = None,
+    color: str | None = None,
+) -> None
+```
+
+Simplified version without progress bar or traffic light logic - just label, value, and delta.
+
+<ParamField path="label" type="str" required>
+  The label text for the KPI
+</ParamField>
+
+<ParamField path="value" type="str" required>
+  The main value to display
+</ParamField>
+
+<ParamField path="delta_pct" type="float | None" default="None">
+  The percentage change from previous period (as decimal)
+</ParamField>
+
+<ParamField path="color" type="str | None" default="None">
+  Custom hex color for the left border. Defaults to primary_light if None
+</ParamField>
+
+#### Example Usage
+
+```python
+from components.kpi_card import render_kpi_card_simple
+from config import COLORS
+
+render_kpi_card_simple(
+    label="Ticket Promedio",
+    value="$15,250",
+    delta_pct=0.08,
+    color=COLORS["success"]
+)
+```
+
+---
+
+### render_kpi_row
+
+```python
+render_kpi_row(cards: list[dict]) -> None
+```
+
+Renders a row of KPI cards using Streamlit columns. Automatically distributes cards evenly.
+
+<ParamField path="cards" type="list[dict]" required>
+  List of dictionaries, each containing parameters for `render_kpi_card`:
+  - `label` (str): Card label
+  - `value` (str): Display value
+  - `delta_pct` (float | None): Percentage change
+  - `objetivo` (str | None): Target value
+  - `cumplimiento` (float | None): Achievement rate
+  - `icon` (str): Icon/emoji
+</ParamField>
+
+#### Example Usage
+
+```python
+from components.kpi_card import render_kpi_row
+
+cards_data = [
+    {
+        "label": "Ventas",
+        "value": "$125,000",
+        "delta_pct": 0.12,
+        "objetivo": "$100,000",
+        "cumplimiento": 1.25,
+        "icon": "💰"
+    },
+    {
+        "label": "Clientes",
+        "value": "350",
+        "delta_pct": 0.05,
+        "icon": "👥"
+    },
+]
+
+render_kpi_row(cards_data)
+```
+
+## Styling Details
+
+### Card Structure
+
+Each KPI card consists of:
+1. **Border**: 4px left border with traffic light color
+2. **Label**: Uppercase, small font, with optional icon
+3. **Value**: Large, bold primary text (26px)
+4. **Delta**: Color-coded change indicator with arrow
+5. **Progress bar**: 5px height, rounded, shows achievement percentage
+6. **Goal text**: Small text showing "X% del objetivo $Y"
+
+### Color Scheme
+
+Cards use colors from `config.COLORS`:
+- Background: `bg_card`
+- Primary text: `text_primary`
+- Secondary text: `text_secondary`
+- Success (green): `success`
+- Warning (orange): `warning`
+- Danger (red): `danger`
+- Border: `border`
+
+### Responsive Behavior
+
+- Cards have `width: 100%` by default to fill their container
+- Use Streamlit's `st.columns()` to create responsive layouts
+- On mobile, columns stack vertically automatically
+
+## Dependencies
+
+```python
+import streamlit as st
+from config import (
+    get_color_semaforo,
+    get_label_semaforo,
+    fmt_pct,
+    COLORS
+)
+```
+
+## Related
+
+- [Charts](/api/components/charts) - Plotly chart components
+- [Rankings](/api/components/rankings) - Ranking table components
+- [Configuration](/development/architecture) - Color and formatting utilities

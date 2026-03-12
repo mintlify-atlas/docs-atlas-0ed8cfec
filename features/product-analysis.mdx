@@ -1,0 +1,346 @@
+---
+title: 'Product Analysis'
+description: 'Comprehensive product portfolio analysis with treemap visualization, Pareto classification, and rotation analysis'
+icon: 'box'
+---
+
+## Overview
+
+The **Product Analysis** page (Análisis de Productos) provides complete visibility into your product portfolio with visual treemap representations, Pareto 80/20 analysis, slow-moving inventory detection, and growth trend identification. This view helps answer: Which products drive revenue? Which SKUs are underperforming? Where are opportunities to optimize the product mix?
+
+<CardGroup cols={2}>
+  <Card title="Visual Treemap" icon="grid-2">
+    Interactive category and SKU visualization where size represents sales volume
+  </Card>
+  <Card title="Pareto Analysis" icon="chart-waterfall">
+    Identify the 20% of products generating 80% of revenue
+  </Card>
+  <Card title="Rotation Tracking" icon="arrows-rotate">
+    Detect slow-moving and stagnant inventory requiring attention
+  </Card>
+  <Card title="Growth Detection" icon="chart-line-up">
+    Automatically identify products with significant growth potential
+  </Card>
+</CardGroup>
+
+## Key Metrics
+
+### Product Portfolio KPIs
+
+**Active SKUs**
+- Number of products available in the catalog
+- Filtered to active products only
+- Total inventory count
+
+**Categories**
+- Number of distinct product categories
+- Portfolio diversity indicator
+
+**No Movement (60 days)**
+- Count of SKUs with zero sales in last 60 days
+- Stagnant inventory metric
+- Color-coded indicator (green if zero, yellow/red if >0)
+
+**Average Sales per SKU**
+- Mean revenue per product
+- Portfolio productivity metric
+
+<Info>
+The "No Movement" threshold of 60 days can be customized based on your business cycle. Products with no sales in this period may indicate overstocking, obsolescence, or need for promotion.
+</Info>
+
+## Implementation Details
+
+The Product Analysis page is implemented in `visor_kpi/pages/4_productos.py`.
+
+### Data Loading and Calculations
+
+```python
+with st.spinner("Analizando productos..."):
+    data    = load_data()
+    df      = get_filtered_data(fecha_desde, fecha_hasta, 
+                                vendedores_sel, zonas_sel, canales_sel)
+    df_ant  = get_filtered_data_periodo_anterior(fecha_desde, fecha_hasta, 
+                                                  vendedores_sel, zonas_sel, canales_sel)
+    prod_df = data["productos"]
+
+kp = kpi_productos(df, df_ant)
+```
+
+### No-Movement Product Detection
+
+```python
+n_activos    = prod_df[prod_df["activo"] == True]["id_producto"].nunique()
+n_cats       = prod_df["categoria"].nunique() if "categoria" in prod_df.columns else 0
+n_sin_movim  = 0
+
+if not kp.empty and "dias_sin_venta" not in kp.columns:
+    # Calculate products without movement in last 60 days
+    ultimo_venta = df.groupby("id_producto")["fecha"].max()
+    corte_60     = pd.Timestamp(fecha_hasta) - pd.Timedelta(days=60)
+    prod_activos = prod_df[prod_df["activo"] == True]["id_producto"].tolist()
+    n_sin_movim  = sum(
+        1 for p in prod_activos
+        if p not in ultimo_venta.index or ultimo_venta[p] < corte_60
+    )
+```
+
+### Average Sales per SKU
+
+```python
+ticket_prom_prod = kp["importe_total"].mean() if not kp.empty else 0
+
+render_kpi_card("Venta prom. por SKU", fmt_moneda(ticket_prom_prod), icon="📈")
+```
+
+## Visualizations
+
+### Product Treemap
+
+Hierarchical visualization of product portfolio:
+
+```python
+fig_tree = chart_treemap_productos(kp, title="Productos por Categoría — Tamaño = Ventas")
+st.plotly_chart(fig_tree, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+**Features:**
+- Two-level hierarchy: category → product
+- Rectangle size proportional to sales amount
+- Color-coded by category
+- Interactive drill-down
+- Hover shows exact values
+
+**Insights:**
+- Visually identify dominant product categories
+- Compare product performance within categories
+- Spot portfolio imbalances
+- Identify opportunities for category expansion
+
+<Note>
+The treemap uses Plotly's sunburst-style visualization, making it easy to see both category-level and SKU-level performance at a glance.
+</Note>
+
+### Product Pareto Chart
+
+80/20 analysis of product revenue contribution:
+
+```python
+fig_pareto_prod = chart_pareto(
+    kp,
+    titulo     = "Pareto de Productos",
+    col_nombre = "descripcion",
+    col_valor  = "importe_total",
+    top_n      = 30,
+)
+st.plotly_chart(fig_pareto_prod, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+**Shows:**
+- Bar chart of top 30 products by sales
+- Cumulative percentage line
+- 80% threshold marker
+- Pareto A/B/C classification
+
+**Typical distribution:**
+- **Category A** (top 20% of SKUs): 80% of sales
+- **Category B** (next 30% of SKUs): 15% of sales
+- **Category C** (bottom 50% of SKUs): 5% of sales
+
+## Category Filtering
+
+Dynamic filtering by product category:
+
+```python
+if not kp.empty and "categoria" in kp.columns:
+    cats_disponibles = sorted(kp["categoria"].unique().tolist())
+    cat_sel = st.multiselect(
+        "🏷️ Filtrar por categoría:",
+        cats_disponibles,
+        default=[],
+        key="_cat_prod_filter",
+    )
+    kp_filtrado = kp[kp["categoria"].isin(cat_sel)] if cat_sel else kp.copy()
+else:
+    kp_filtrado = kp.copy()
+```
+
+**Use cases:**
+- Focus on specific product lines
+- Compare performance across categories
+- Isolate underperforming categories
+- Analyze category trends
+
+## Product Ranking Table
+
+Detailed table with all product metrics:
+
+```python
+render_ranking_productos(kp_filtrado, top_n=60)
+```
+
+**Columns include:**
+- Product description
+- Category
+- Total sales amount
+- Sales volume (units)
+- Pareto category (A/B/C)
+- Variation vs. previous period (%)
+- Days since last sale
+- Sales trend indicator
+
+<Info>
+The table is sortable by any column. Click column headers to sort by that metric, making it easy to identify top or bottom performers.
+</Info>
+
+## No-Movement Products
+
+Identifies SKUs requiring attention:
+
+```python
+ultimo_venta = df.groupby("id_producto")["fecha"].max().reset_index()
+ultimo_venta.columns = ["id_producto", "ultima_venta"]
+kp_sin = kp.merge(ultimo_venta, on="id_producto", how="left")
+corte_60 = pd.Timestamp(fecha_hasta) - pd.Timedelta(days=60)
+sin_mov  = kp_sin[kp_sin["ultima_venta"] < corte_60].copy()
+if sin_mov.empty:
+    st.success("✅ Todos los productos tienen movimiento reciente.")
+else:
+    render_ranking_productos(sin_mov, top_n=15)
+```
+
+**Why products stop moving:**
+- Seasonal items out of season
+- Obsolete or discontinued products
+- Overstocked inventory
+- Poor placement or visibility
+- Price too high vs. competition
+- Lack of seller awareness or training
+
+**Recommended actions:**
+- Run clearance promotions
+- Bundle with popular products
+- Discontinue and liquidate stock
+- Update pricing strategy
+- Train sales team on product benefits
+
+<Warning>
+Products with no movement for 60+ days should be reviewed monthly. Holding stagnant inventory ties up working capital and warehouse space.
+</Warning>
+
+## High-Growth Products
+
+Automatically identifies fast-growing SKUs:
+
+```python
+if not kp.empty and "vs_periodo_anterior" in kp.columns:
+    crec = kp[kp["vs_periodo_anterior"].fillna(0) > 0.10].sort_values(
+        "vs_periodo_anterior", ascending=False
+    ).head(15)
+    if crec.empty:
+        st.info("Sin crecimiento significativo en este período.")
+    else:
+        render_ranking_productos(crec, top_n=15)
+```
+
+**Growth criteria:**
+- Increase >10% vs. previous period
+- Sorted by growth percentage
+- Top 15 displayed
+
+**Strategic actions for high-growth products:**
+- Increase inventory levels to avoid stock-outs
+- Promote more aggressively
+- Train all sellers to emphasize these products
+- Analyze what's driving growth (market trend, promotion, seasonality)
+- Consider expanding product line variants
+
+## Product Performance Analysis
+
+### Sales Distribution by Category
+
+The treemap visualization provides immediate insights:
+
+```python
+visor_kpi/pages/4_productos.py:95
+fig_tree = chart_treemap_productos(kp, title="Productos por Categoría — Tamaño = Ventas")
+```
+
+**Analysis techniques:**
+1. **Dominant categories**: Largest rectangles show which categories drive most revenue
+2. **Category diversity**: Number of visible rectangles indicates portfolio breadth
+3. **Within-category leaders**: Largest sub-rectangles show category champions
+4. **Tail products**: Tiny rectangles may be candidates for discontinuation
+
+### Product Lifecycle Management
+
+Combine metrics to assess product lifecycle stage:
+
+- **Growth**: High sales increase, increasing frequency
+- **Maturity**: Stable sales, high volume
+- **Decline**: Decreasing sales, fewer customers buying
+- **Obsolete**: No movement, consider discontinuation
+
+## Integration with Alert System
+
+Product analysis triggers automatic alerts:
+
+- **ALT003**: Product with sales drop >30% MoM (high severity)
+- **ALT005**: Products with margin below minimum threshold (critical)
+- **Informational**: Products with high growth (opportunity)
+
+See [Alerts Center](/features/alerts-center) for alert management.
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Product portfolio review">
+    1. View the treemap to understand category distribution
+    2. Check the Pareto chart to identify top 20% of products
+    3. Review no-movement products for clearance
+    4. Analyze high-growth products for inventory expansion
+    5. Set category-level goals based on current performance
+  </Accordion>
+  
+  <Accordion title="Inventory optimization">
+    1. Filter to "Sin movimiento (60d)" to identify stagnant stock
+    2. Cross-reference with margin data to prioritize clearance
+    3. Review category balance in treemap
+    4. Identify overstocked categories
+    5. Plan procurement based on high-growth products
+  </Accordion>
+  
+  <Accordion title="Sales strategy planning">
+    1. Identify Pareto A products for emphasis in training
+    2. Review Pareto C products for potential discontinuation
+    3. Analyze high-growth products to understand market trends
+    4. Compare performance across commercial channels
+    5. Set product-specific sales targets
+  </Accordion>
+  
+  <Accordion title="Pricing and margin analysis">
+    1. Sort products by margin percentage
+    2. Identify high-volume, low-margin products
+    3. Find low-volume, high-margin products for targeted selling
+    4. Compare pricing vs. previous period
+    5. Analyze margin trends over time
+  </Accordion>
+</AccordionGroup>
+
+## Export and Reporting
+
+Product data can be exported for further analysis:
+- Full product ranking table
+- No-movement product list
+- High-growth product report
+- Category performance summary
+
+Use Streamlit's built-in CSV export functionality on data tables.
+
+## Related Pages
+
+- [Individual Seller View](/features/individual-seller-view) - Personal product performance
+- [Executive Summary](/features/executive-summary) - Top product rankings
+- [Alerts Center](/features/alerts-center) - Product performance alerts

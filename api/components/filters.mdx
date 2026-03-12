@@ -1,0 +1,313 @@
+---
+title: Filter Components
+description: Sidebar filter system with session state persistence for date ranges, zones, vendors, and channels
+---
+
+The `filters` module provides a global sidebar filter system that persists state across pages using `st.session_state`.
+
+## Overview
+
+The filter system includes:
+- Date range selection with predefined periods
+- Multi-select filters for zones, vendors, and channels
+- Session state persistence across page navigation
+- Automatic URL-friendly date range presets
+- Reset functionality
+
+## Functions
+
+### init_session_state
+
+```python
+init_session_state() -> None
+```
+
+Initializes the global filter state if it doesn't exist. Call this at the start of every page.
+
+#### Default Values
+
+Sets the following session state keys:
+
+| Key | Default Value | Description |
+|-----|---------------|-------------|
+| `periodo_sel` | `"Este mes"` | Selected period name |
+| `fecha_desde` | First day of current month | Start date |
+| `fecha_hasta` | Today | End date |
+| `vendedores_sel` | `[]` | List of selected vendor IDs |
+| `zonas_sel` | `[]` | List of selected zones |
+| `canales_sel` | `[]` | List of selected channels |
+| `alertas_revisadas` | `set()` | Set of reviewed alert IDs |
+| `data_loaded` | `False` | Data load status flag |
+
+#### Example Usage
+
+```python
+from components.filters import init_session_state
+
+# app.py:47
+init_session_state()
+```
+
+---
+
+### render_sidebar_filters
+
+```python
+render_sidebar_filters(mostrar_vendedor: bool = True) -> dict
+```
+
+Renders the complete sidebar filter UI and returns the current filter values.
+
+<ParamField path="mostrar_vendedor" type="bool" default="True">
+  Whether to show the vendor filter. Set to `False` for executive/manager views that analyze all vendors.
+</ParamField>
+
+#### Return Value
+
+Returns a dictionary with current filter selections:
+
+```python
+{
+    "fecha_desde": date,           # Start date (date object)
+    "fecha_hasta": date,           # End date (date object)
+    "vendedores_sel": list[int],   # Selected vendor IDs
+    "zonas_sel": list[str],        # Selected zones
+    "canales_sel": list[str],      # Selected channels
+    "periodo_sel": str,            # Selected period name
+}
+```
+
+#### Sidebar Sections
+
+**1. Header**
+- Logo/title: "📊 Visor KPI"
+- Subtitle: "Performance Comercial"
+- Horizontal divider
+
+**2. Period Selector**
+- Dropdown with predefined periods from `config.get_periodos()`
+- Custom date range option with two date pickers
+- Date range display in DD/MM/YYYY format
+
+**3. Zone Filter**
+- Multi-select with zones from `config.ZONAS`
+- Placeholder: "Todas las zonas"
+- Icon: 🗺️
+
+**4. Vendor Filter** (if `mostrar_vendedor=True`)
+- Multi-select with vendor names from `data_loader.get_lista_vendedores()`
+- Format: "Nombre Completo (Zona)"
+- Filtered by selected zones if any
+- Placeholder: "Todos los vendedores"
+- Icon: 👤
+
+**5. Channel Filter**
+- Multi-select with channels from `config.CANALES`
+- Placeholder: "Todos los canales"
+- Icon: 🏪
+
+**6. Reset Button**
+- Clears all filters and resets to defaults
+- Triggers `st.rerun()` to refresh the page
+- Full-width button with 🔄 icon
+
+**7. Last Update Indicator**
+- Shows current date
+- Gray divider above
+- Centered, small font
+
+#### Example Usage
+
+```python
+from components.filters import render_sidebar_filters
+
+# app.py:59-64
+filtros = render_sidebar_filters()
+fecha_desde    = filtros["fecha_desde"]
+fecha_hasta    = filtros["fecha_hasta"]
+vendedores_sel = filtros["vendedores_sel"] or None
+zonas_sel      = filtros["zonas_sel"]      or None
+canales_sel    = filtros["canales_sel"]    or None
+```
+
+```python
+# pages/1_gerencia.py:31 - Manager view without vendor filter
+filtros = render_sidebar_filters(mostrar_vendedor=False)
+```
+
+```python
+# pages/2_vendedores.py:39 - Vendor view with vendor selection
+filtros = render_sidebar_filters(mostrar_vendedor=True)
+```
+
+---
+
+## Predefined Periods
+
+The period selector uses `config.get_periodos()` which typically includes:
+
+- **Hoy** - Today only
+- **Esta semana** - Current week (Mon-Sun)
+- **Este mes** - Current month (1st to today)
+- **Último mes** - Full previous month
+- **Último trimestre** - Last 3 complete months
+- **Este año** - Year to date (Jan 1 to today)
+- **Último año** - Full previous year
+- **Personalizado** - Custom date range with date pickers
+
+## Session State Persistence
+
+Filters persist across pages because they use `st.session_state`. When a user navigates between pages:
+
+1. Previous selections are maintained
+2. Filter values are immediately available
+3. Data queries use consistent date ranges
+4. No need to reselect filters on each page
+
+### State Synchronization
+
+The module uses hidden widgets with keys like `_periodo_widget`, `_zonas_widget`, etc. to bind Streamlit widgets to session state. This ensures:
+
+- Widget changes update session state
+- Session state values initialize widget defaults
+- State survives page navigation and reruns
+
+## Dynamic Vendor Loading
+
+The vendor filter dynamically loads options using:
+
+```python
+from src.data_loader import get_lista_vendedores
+
+vendedores_lista = get_lista_vendedores()
+opciones_vend = {
+    f"{v['nombre_completo']} ({v['zona']})": v["id_vendedor"]
+    for v in vendedores_lista
+}
+```
+
+This:
+- Displays human-readable names in the dropdown
+- Returns numeric IDs for filtering
+- Filters vendors by selected zones
+- Handles errors gracefully if data unavailable
+
+## Styling
+
+Filters use inline HTML/CSS styling from `config.COLORS`:
+
+- **Section headers**: Uppercase, 11px, letter-spacing: 1px, secondary text color
+- **Icons**: Emoji prefixes for visual identification
+- **Dividers**: Horizontal rules with border color
+- **Date display**: Small font, gray, centered formatting
+- **Reset button**: Full-width, standard Streamlit button
+
+## Error Handling
+
+The vendor filter includes try/except to handle:
+- Missing `data_loader` module
+- Empty vendor lists
+- Database connection errors
+
+Fails gracefully with empty options dict if loading fails.
+
+## Filter Application Pattern
+
+Typical usage pattern in pages:
+
+```python
+# 1. Initialize state
+init_session_state()
+
+# 2. Render filters and get values
+filtros = render_sidebar_filters()
+
+# 3. Extract values (convert empty lists to None for SQL queries)
+fecha_desde    = filtros["fecha_desde"]
+fecha_hasta    = filtros["fecha_hasta"]
+vendedores_sel = filtros["vendedores_sel"] or None
+zonas_sel      = filtros["zonas_sel"]      or None
+canales_sel    = filtros["canales_sel"]    or None
+
+# 4. Load filtered data
+df = get_filtered_data(
+    fecha_desde, 
+    fecha_hasta, 
+    vendedores_sel, 
+    zonas_sel, 
+    canales_sel
+)
+```
+
+## Dependencies
+
+```python
+import streamlit as st
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
+from config import COLORS, ZONAS, CANALES, get_periodos
+from src.data_loader import get_lista_vendedores
+```
+
+## Related
+
+- [Data Loader](/api/data-loader) - Data filtering functions
+- [Configuration](/development/architecture) - Zone and channel definitions
+- [KPI Engine](/api/kpi-engine) - Functions that consume filter values
+
+## Best Practices
+
+### Always Initialize State
+
+Call `init_session_state()` at the top of every page:
+
+```python
+from components.filters import init_session_state
+
+init_session_state()  # First thing after imports
+```
+
+### Convert Empty Lists to None
+
+Data loader functions expect `None` for "all values", not empty lists:
+
+```python
+# ✅ Correct
+vendedores_sel = filtros["vendedores_sel"] or None
+
+# ❌ Incorrect - empty list may cause issues
+vendedores_sel = filtros["vendedores_sel"]
+```
+
+### Hide Vendor Filter for Executive Views
+
+Management dashboards should analyze all vendors:
+
+```python
+# Executive/manager pages
+filtros = render_sidebar_filters(mostrar_vendedor=False)
+```
+
+### Show Vendor Filter for Individual Analysis
+
+Vendor-specific pages need the selector:
+
+```python
+# Vendor detail pages
+filtros = render_sidebar_filters(mostrar_vendedor=True)
+```
+
+### Handle Custom Period Correctly
+
+When period is "Personalizado", use the date picker values:
+
+```python
+if periodo_sel == "Personalizado":
+    # Use date pickers (already handled by render_sidebar_filters)
+    fecha_desde = st.session_state["fecha_desde"]
+    fecha_hasta = st.session_state["fecha_hasta"]
+else:
+    # Use predefined period range
+    rango = periodos[periodo_sel]
+    fecha_desde, fecha_hasta = rango
+```

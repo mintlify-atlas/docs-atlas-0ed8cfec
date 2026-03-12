@@ -1,0 +1,291 @@
+---
+title: Alert Severity Levels
+description: Understanding alert priorities, urgency, and display classification
+---
+
+## Overview
+
+The alerts system uses a **4-tier severity classification** to prioritize alerts and guide appropriate responses. Severity affects display order, visual styling, and notification routing.
+
+## Severity Tiers
+
+<CardGroup cols={2}>
+  <Card title="Alta (Critical)" icon="triangle-exclamation" color="#ea5a0c">
+    Immediate action required. Revenue or relationship at risk.
+  </Card>
+  <Card title="Media (Medium)" icon="exclamation-circle" color="#f59e0b">
+    Attention needed soon. Potential issues developing.
+  </Card>
+  <Card title="Baja (Low)" icon="info-circle" color="#6b7280">
+    Monitor and address when convenient.
+  </Card>
+  <Card title="Info (Opportunity)" icon="lightbulb" color="#10b981">
+    Positive signals worth leveraging.
+  </Card>
+</CardGroup>
+
+## Severity Definitions
+
+### Alta (Critical)
+
+<ResponseField name="alta" type="severity">
+  **Color**: Red/Orange (`#ea5a0c`)
+  
+  **Priority**: 0 (highest)
+  
+  **Response Time**: Same day
+  
+  **Typical Issues**:
+  - Revenue loss from key customers
+  - Severe salesperson underperformance
+  - Critical relationship risks
+  
+  **Notification**: Email + Dashboard highlight
+</ResponseField>
+
+#### Rules with `alta` Severity
+
+| Rule ID | Alert Name | Impact |
+|---------|------------|--------|
+| **ALT001** | Vendedor bajo rendimiento crítico | Salesperson at less than 65% target achievement |
+| **ALT003** | Caída de venta en cliente relevante | Category A customer with >25% sales drop |
+
+**Example from Code**:
+
+```python
+ALERT_RULES[0] = {
+    "id":              "ALT001",
+    "nombre":          "Vendedor bajo rendimiento crítico",
+    "severidad":       "alta",  # Critical severity
+    # ...
+}
+```
+
+---
+
+### Media (Medium)
+
+<ResponseField name="media" type="severity">
+  **Color**: Amber (`#f59e0b`)
+  
+  **Priority**: 1
+  
+  **Response Time**: Within 2-3 days
+  
+  **Typical Issues**:
+  - Customer inactivity (churn risk)
+  - Salesperson inactivity (productivity concern)
+  
+  **Notification**: Dashboard display
+</ResponseField>
+
+#### Rules with `media` Severity
+
+| Rule ID | Alert Name | Impact |
+|---------|------------|--------|
+| **ALT002** | Cliente sin compras (riesgo de pérdida) | Active customer with no purchases in 45+ days |
+| **ALT005** | Vendedor sin actividad reciente | Salesperson with no transactions in 7+ business days |
+
+**Example from Code**:
+
+```python
+ALERT_RULES[1] = {
+    "id":              "ALT002",
+    "nombre":          "Cliente sin compras (riesgo de pérdida)",
+    "severidad":       "media",  # Medium severity
+    # ...
+}
+```
+
+---
+
+### Baja (Low)
+
+<ResponseField name="baja" type="severity">
+  **Color**: Gray (`#6b7280`)
+  
+  **Priority**: 2
+  
+  **Response Time**: Within a week
+  
+  **Typical Issues**:
+  - Product stagnation
+  - Inventory management concerns
+  
+  **Notification**: Dashboard only
+</ResponseField>
+
+#### Rules with `baja` Severity
+
+| Rule ID | Alert Name | Impact |
+|---------|------------|--------|
+| **ALT004** | Producto sin movimiento | Active product with no sales in 60+ days |
+
+**Example from Code**:
+
+```python
+ALERT_RULES[3] = {
+    "id":              "ALT004",
+    "nombre":          "Producto sin movimiento",
+    "severidad":       "baja",  # Low severity
+    # ...
+}
+```
+
+---
+
+### Info (Opportunity)
+
+<ResponseField name="info" type="severity">
+  **Color**: Green (`#10b981`)
+  
+  **Priority**: 3 (lowest)
+  
+  **Response Time**: Opportunistic
+  
+  **Typical Signals**:
+  - Growth opportunities
+  - Positive momentum
+  - Strategic upsell potential
+  
+  **Notification**: Dashboard only
+</ResponseField>
+
+#### Rules with `info` Severity
+
+| Rule ID | Alert Name | Impact |
+|---------|------------|--------|
+| **ALT006** | Oportunidad: cliente B en crecimiento | Category B customer growing >30% (upgrade potential) |
+| **ALT007** | Equipo cerca del objetivo mensual | Team at >85% target with time remaining |
+
+**Example from Code**:
+
+```python
+ALERT_RULES[5] = {
+    "id":              "ALT006",
+    "nombre":          "Oportunidad: cliente B en crecimiento",
+    "severidad":       "info",  # Opportunity/info severity
+    # ...
+}
+```
+
+## How Severity Affects Display
+
+### Automatic Sorting
+
+Alerts are **automatically sorted by severity** when returned from the engine:
+
+```python
+# Severity priority map
+orden_sev = {"alta": 0, "media": 1, "baja": 2, "info": 3}
+
+# Apply sorting
+df_alertas["_ord"] = df_alertas["severidad"].map(orden_sev).fillna(4)
+df_alertas = df_alertas.sort_values("_ord").drop(columns=["_ord"]).reset_index(drop=True)
+```
+
+This ensures:
+- **Critical alerts (`alta`) always appear first**
+- Opportunities (`info`) appear at the bottom
+- Users focus on highest-priority issues
+
+### Visual Styling
+
+Streamlit dashboards use severity for color-coded badges:
+
+| Severity | Badge Color | Icon |
+|----------|-------------|------|
+| `alta` | Red/Orange | ⚠️ |
+| `media` | Amber | ⚡ |
+| `baja` | Gray | ℹ️ |
+| `info` | Green | 💡 |
+
+### Notification Routing
+
+Severity determines notification channels:
+
+```python
+if alert["severidad"] == "alta":
+    send_email_notification(alert)  # Immediate email
+    highlight_in_dashboard(alert)   # Red badge
+elif alert["severidad"] == "media":
+    highlight_in_dashboard(alert)   # Amber badge
+else:
+    display_in_dashboard(alert)     # Standard display
+```
+
+## Severity Distribution Example
+
+Typical alert distribution in a healthy operation:
+
+| Severity | Count | Percentage |
+|----------|-------|------------|
+| Alta | 2-5 | 10-15% |
+| Media | 5-10 | 25-30% |
+| Baja | 8-12 | 35-40% |
+| Info | 3-8 | 20-25% |
+
+<Warning>
+If **>20% of alerts are `alta` severity**, this indicates systemic performance issues requiring strategic intervention beyond alert response.
+</Warning>
+
+## Prioritization Strategy
+
+### Recommended Response Flow
+
+1. **Morning Review** (9:00 AM)
+   - Address all `alta` alerts immediately
+   - Triage `media` alerts for same-day or next-day action
+
+2. **Mid-Day Check** (2:00 PM)
+   - Follow up on `alta` alert actions taken
+   - Begin working `media` alert queue
+
+3. **Weekly Planning** (Friday)
+   - Review all `baja` alerts
+   - Identify strategic opportunities from `info` alerts
+   - Plan customer visits for ALT006 growth opportunities
+
+### Team Assignment
+
+| Severity | Owner | Escalation |
+|----------|-------|------------|
+| Alta | Sales Manager | Executive (if unresolved in 24h) |
+| Media | Team Lead | Sales Manager (if unresolved in 3 days) |
+| Baja | Assigned Rep | Team Lead (weekly review) |
+| Info | Assigned Rep | None (opportunity-based) |
+
+## Configuring Severity
+
+<Warning>
+Severity levels are **hard-coded** in `alerts_engine.py`. Changing severity requires source code modification:
+
+```python
+ALERT_RULES[0]["severidad"] = "media"  # Downgrade ALT001 from alta to media
+```
+
+After modification, restart the application for changes to take effect.
+</Warning>
+
+## Best Practices
+
+<Tip>
+**Don't ignore low-severity alerts**. While `baja` and `info` alerts don't require immediate action, they provide valuable early warnings and growth signals that prevent future `alta` alerts.
+</Tip>
+
+### Alert Fatigue Prevention
+
+- **Review thresholds quarterly**: Ensure severity assignments match business reality
+- **Track false positives**: If an alert rarely leads to action, consider downgrading or removing it
+- **Celebrate opportunities**: Act on `info` alerts to build positive momentum
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Alert Rules" icon="list-check" href="./alert-rules">
+    Detailed documentation of all 7 rules
+  </Card>
+  <Card title="Overview" icon="gauge" href="./overview">
+    Return to alerts system overview
+  </Card>
+</CardGroup>

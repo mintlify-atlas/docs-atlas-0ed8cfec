@@ -1,0 +1,225 @@
+---
+title: Architecture
+description: Project structure, technology stack, and design patterns used in Visor KPI Comercial
+---
+
+## Overview
+
+Visor KPI Comercial is a Streamlit-based business intelligence dashboard for commercial KPI analysis. The application follows a modular architecture with clear separation between data processing, business logic, and presentation layers.
+
+## Project Structure
+
+The codebase is organized into the following directories:
+
+```
+visor_kpi/
+├── app.py                    # Main entry point (Executive Summary page)
+├── config.py                 # Global configuration and constants
+├── requirements.txt          # Python dependencies
+├── assets/                   # CSS and static files
+├── components/              # Reusable UI components
+│   ├── charts.py            # Chart rendering functions
+│   ├── filters.py           # Sidebar filters
+│   ├── kpi_card.py          # KPI card component
+│   └── rankings.py          # Ranking tables
+├── src/                     # Business logic layer
+│   ├── data_loader.py       # Data loading and filtering
+│   ├── kpi_engine.py        # KPI calculation engine
+│   ├── alerts_engine.py     # Alert detection system
+│   ├── pareto.py            # Pareto analysis
+│   └── reports.py           # Report generation
+├── pages/                   # Streamlit multi-page views
+│   ├── 1_gerencia.py        # Management view
+│   ├── 2_vendedores.py      # Sales team analysis
+│   ├── 3_clientes.py        # Customer analysis
+│   ├── 4_productos.py       # Product analysis
+│   └── 5_alertas.py         # Alert center
+├── data/
+│   ├── raw/                 # Raw data files (Excel)
+│   └── mock/                # Mock data generator
+└── tests/                   # Test suite
+    ├── test_mock_data.py
+    ├── test_kpis.py
+    └── test_alerts.py
+```
+
+## Layer Separation
+
+### Business Logic Layer (`src/`)
+
+Contains pure Python functions for data processing and calculations:
+
+- **`kpi_engine.py`**: Core KPI calculations (sales metrics, margins, coverage, rankings)
+- **`alerts_engine.py`**: Business rules engine for detecting critical situations (ALT001-ALT007)
+- **`pareto.py`**: Pareto analysis (ABC categorization)
+- **`data_loader.py`**: Data loading, caching, and filtering
+- **`reports.py`**: Report generation logic
+
+### Presentation Layer (`components/`)
+
+Reusable UI components for consistent design:
+
+- **`kpi_card.py`**: KPI card with value, delta, and traffic light indicator
+- **`charts.py`**: Chart factory functions (evolution, gauges, donuts, bars)
+- **`filters.py`**: Sidebar filter controls with session state management
+- **`rankings.py`**: Formatted ranking tables for top performers
+
+### View Layer (`pages/`)
+
+Streamlit pages that compose components and business logic:
+
+- Executive Summary (`app.py`)
+- Management Dashboard (gerencia)
+- Sales Team Analysis (vendedores)
+- Customer Analysis (clientes)
+- Product Analysis (productos)
+- Alert Center (alertas)
+
+## Technology Stack
+
+### Core Framework
+- **Streamlit** `>=1.32.0,<2.0` - Web application framework
+- **Python** `3.9+` - Programming language
+
+### Data Processing
+- **pandas** `>=2.2.0,<3.0` - Data manipulation and analysis
+- **numpy** `>=1.26.4,<2.0` - Numerical computing
+- **openpyxl** `>=3.1.5` - Excel file reading
+- **xlsxwriter** `>=3.1.9` - Excel file writing
+
+### Visualization
+- **plotly** `>=5.19.0,<6.0` - Interactive charts and graphs
+
+### Utilities
+- **python-dateutil** `>=2.9.0` - Date manipulation
+- **faker** `>=23.2.0` - Mock data generation
+
+### Testing
+- **pytest** `>=8.0.0` - Testing framework
+
+## Design System
+
+### Color Palette
+
+The application uses a dark theme optimized for data visualization. Colors are defined in `config.py:11-36`:
+
+#### Primary Colors
+```python
+primary:        "#1B3A6B"  # Dark blue
+primary_light:  "#2E5FA3"  # Medium blue
+accent:         "#00C49F"  # Teal accent
+```
+
+#### Performance Indicators (Traffic Light)
+```python
+success:        "#00C49F"  # Green (≥100% achievement)
+warning:        "#FFB347"  # Orange (80-99% achievement)
+danger:         "#E84855"  # Red (<80% achievement)
+```
+
+#### Neutral Colors
+```python
+bg_dark:        "#0F1923"  # Main background
+bg_card:        "#1A2535"  # Card background
+bg_card_hover:  "#243044"  # Card hover state
+text_primary:   "#F0F4F8"  # Primary text
+text_secondary: "#8899AA"  # Secondary text
+border:         "#2D3F55"  # Borders and dividers
+```
+
+#### Chart Sequence
+```python
+chart_seq: [
+    "#2E5FA3", "#00C49F", "#FFB347",
+    "#E84855", "#9B59B6", "#3498DB",
+    "#1ABC9C", "#F39C12"
+]
+```
+
+### Performance Thresholds
+
+Business thresholds are configured in `config.py:38-49`:
+
+```python
+cumplimiento_ok:      1.00   # 100% → green
+cumplimiento_warning: 0.80   # 80%  → orange
+caida_critica:       -0.20   # -20% vs previous → alert
+crecimiento_notable:  0.15   # +15% vs previous → highlight
+pareto_acumulado:     0.80   # 80% volume = A customers
+pareto_B:             0.95   # 80-95% = B, >95% = C
+```
+
+### Typography & Formatting
+
+All number formatting functions are centralized in `config.py:66-168`:
+
+- **`fmt_moneda(valor)`**: Currency formatting (e.g., `$1.284.500`)
+- **`fmt_pct(valor)`**: Percentage formatting (e.g., `84.2%`)
+- **`fmt_numero(valor)`**: Number formatting with thousand separators
+- **`fmt_delta(valor)`**: Delta with arrows (▲ +8.2% / ▼ -3.1%)
+- **`fmt_delta_html(valor)`**: Delta with HTML color coding
+
+### Plotly Theme
+
+Custom Plotly theme for consistent chart styling (`config.py:196-202`):
+
+```python
+PLOTLY_THEME = {
+    "paper_bgcolor": COLORS["bg_card"],
+    "plot_bgcolor":  COLORS["bg_card"],
+    "font":          {"color": COLORS["text_primary"], 
+                      "family": "Inter, sans-serif", 
+                      "size": 12},
+    "margin":        dict(l=20, r=20, t=40, b=20),
+}
+```
+
+## Configuration Management
+
+Global configuration is centralized in `config.py`:
+
+### Business Constants
+
+```python
+ZONAS   = ["GBA Norte", "GBA Sur", "Interior"]
+CANALES = ["Canal Tradicional", "Supermercadismo", "Mayorista", "HoReCa"]
+
+EMPRESA = {
+    "nombre":         "Distribuidora Del Sur S.A.",
+    "periodo_inicio": date(2023, 1, 1),
+    "periodo_fin":    date(2026, 3, 31),
+}
+```
+
+### Data Paths
+
+```python
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "mock_data.xlsx")
+```
+
+## Data Flow
+
+1. **Data Loading**: Excel file loaded via `data_loader.py` with caching
+2. **Filtering**: User selections applied via `get_filtered_data()`
+3. **KPI Calculation**: Business logic in `kpi_engine.py` processes filtered data
+4. **Alert Detection**: `alerts_engine.py` evaluates business rules
+5. **Visualization**: Components render KPIs and charts
+6. **Rendering**: Streamlit displays the complete dashboard
+
+## State Management
+
+Session state is initialized in `components/filters.py` to maintain user selections across page navigation:
+
+```python
+st.session_state.setdefault("fecha_desde", default_start)
+st.session_state.setdefault("fecha_hasta", default_end)
+st.session_state.setdefault("vendedores_sel", [])
+st.session_state.setdefault("zonas_sel", [])
+st.session_state.setdefault("canales_sel", [])
+```
+
+## Next Steps
+
+- [Testing Guide](/development/testing) - Learn how to run tests and validate functionality
+- [Deployment](/deployment) - Deploy to Streamlit Cloud or other platforms

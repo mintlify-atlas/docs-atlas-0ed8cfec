@@ -1,0 +1,257 @@
+---
+title: 'Executive Summary'
+description: 'High-level dashboard view with key business metrics and performance indicators'
+icon: 'chart-line'
+---
+
+## Overview
+
+The **Executive Summary** is the main landing page of Visor KPI Comercial, providing decision-makers with a complete snapshot of the business performance in a single view. It consolidates sales data, team performance, customer coverage, and active alerts without requiring manual spreadsheet analysis.
+
+<CardGroup cols={2}>
+  <Card title="Instant Insights" icon="bolt">
+    View all critical KPIs in one screen: sales, margin, team compliance, and customer coverage
+  </Card>
+  <Card title="Performance Tracking" icon="chart-mixed">
+    Monitor team performance with automatic ranking of top sellers, customers, and products
+  </Card>
+  <Card title="Proactive Alerts" icon="bell">
+    Get notified of critical issues and opportunities before they impact results
+  </Card>
+  <Card title="Trend Analysis" icon="chart-area">
+    Track monthly sales evolution with goal comparison and historical trends
+  </Card>
+</CardGroup>
+
+## Key Metrics Displayed
+
+### Primary KPIs
+
+The executive summary presents four main KPI cards at the top of the dashboard:
+
+**Sales for the Period**
+- Total net sales amount
+- Percentage change vs. previous period
+- Progress toward sales objective
+- Compliance percentage with visual indicator (green/yellow/red)
+
+**Team Compliance**
+- Overall team achievement percentage
+- Visual gauge showing progress toward 100% goal
+- Color-coded status based on performance thresholds
+
+**Gross Margin**
+- Total gross profit for the period
+- Percentage variation compared to previous period
+- Profitability trend indicator
+
+**Customer Coverage**
+- Percentage of active customers in the portfolio
+- Number of customers served during the period
+- New and lost customer metrics
+
+<Note>
+All KPIs automatically compare against the previous equivalent period, showing month-over-month or year-over-year variations depending on your date range selection.
+</Note>
+
+## Implementation Details
+
+The Executive Summary page is implemented in `visor_kpi/app.py` as the main entry point of the application.
+
+### Data Loading and Filtering
+
+The page loads data using the centralized data loader and applies sidebar filters:
+
+```python
+with st.spinner("Calculando indicadores..."):
+    data       = load_data()
+    df         = get_filtered_data(fecha_desde, fecha_hasta, 
+                                    vendedores_sel, zonas_sel, canales_sel)
+    df_ant     = get_filtered_data_periodo_anterior(fecha_desde, fecha_hasta, 
+                                                      vendedores_sel, zonas_sel, canales_sel)
+    clientes_df  = data["clientes"]
+    productos_df = data["productos"]
+    objetivos_df = data["objetivos"]
+```
+
+### KPI Calculation
+
+All metrics are calculated using specialized functions from the KPI engine:
+
+```python
+kv    = kpi_ventas_periodo(df, df_ant, objetivos_df, fecha_desde, fecha_hasta)
+km    = kpi_margen(df, df_ant)
+kc    = kpi_cobertura_clientes(df, clientes_df, df_ant)
+kv_df = kpi_por_vendedor(df, objetivos_df, df_ant, fecha_desde, fecha_hasta)
+kp_df = kpi_productos(df, df_ant)
+kcli  = kpi_clientes(df, clientes_df, df_ant, fecha_hasta)
+evo   = kpi_evolucion_mensual(df, objetivos_df)
+alertas = get_alertas_activas(df, df_ant, clientes_df, productos_df, 
+                                objetivos_df, fecha_hasta)
+```
+
+### Rendering KPI Cards
+
+Each KPI card is rendered with consistent styling and behavior:
+
+```python
+render_kpi_card(
+    label        = "Ventas del Período",
+    value        = fmt_moneda(kv["importe_total"]),
+    delta_pct    = kv.get("importe_vs_anterior"),
+    objetivo     = fmt_moneda(kv.get("objetivo_total", 0)),
+    cumplimiento = kv.get("cumplimiento_pct"),
+    icon         = "💰",
+)
+```
+
+## Visualizations
+
+### Team Compliance Gauge
+
+A visual gauge chart displays overall team performance with color-coded zones:
+
+```python
+fig_gauge = chart_gauge_cumplimiento(
+    valor = kv.get("cumplimiento_pct") or 0,
+    label = "Cumplimiento General",
+)
+st.plotly_chart(fig_gauge, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+Below the gauge, quick metrics show the distribution of sellers by performance:
+- 🟢 In green: sellers exceeding goals
+- 🟡 In yellow: sellers approaching goals
+- 🔴 In red: sellers below acceptable thresholds
+
+### Sales Evolution Chart
+
+A line chart tracks monthly sales progression compared to objectives:
+
+```python
+fig_evo = chart_evolucion_ventas(evo, mostrar_objetivo=True)
+st.plotly_chart(fig_evo, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+### Channel Distribution Donut
+
+Visualizes sales distribution across different commercial channels:
+
+```python
+fig_donut = chart_donut_canales(df)
+st.plotly_chart(fig_donut, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+## Top Rankings
+
+Three side-by-side rankings highlight the best performers:
+
+**Top Sellers**
+- Ranked by total sales and compliance percentage
+- Shows position variation vs. previous period
+- Color-coded performance indicators
+
+**Top Customers**
+- Sorted by total purchase amount
+- Displays purchase frequency
+- Flags at-risk customers
+
+**Top Products**
+- Ordered by sales volume
+- Shows category and growth trend
+- Identifies SKUs without movement
+
+<Info>
+All rankings are interactive and update automatically when you change the sidebar filters (date range, zones, channels, or sellers).
+</Info>
+
+## AI-Generated Insights
+
+The executive summary includes an automatic insight box that analyzes performance and highlights key findings:
+
+```python
+insight = generar_insight_ejecutivo(kv, kv_df, alertas)
+st.markdown(
+    f'<div class="insight-box">{insight}</div>',
+    unsafe_allow_html=True,
+)
+```
+
+This insight provides:
+- Overall performance assessment
+- Critical alerts requiring attention
+- Top performers deserving recognition
+- Recommended next actions
+
+## Active Alerts Panel
+
+The alerts section displays the most critical issues and opportunities:
+
+```python
+if not alertas.empty:
+    n_alta  = len(alertas[alertas["severidad"] == "alta"])
+    n_media = len(alertas[alertas["severidad"] == "media"])
+    n_info  = len(alertas[alertas["severidad"].isin(["baja", "info"])])
+    
+    # Display summary metrics
+    c_a.metric("🔴 Críticas",    n_alta)
+    c_m.metric("🟡 Medias",      n_media)
+    c_i.metric("🔵 Informativas", n_info)
+```
+
+Each alert displays:
+- Severity indicator (red/yellow/blue icon)
+- Alert name and code
+- Affected entity (seller, customer, or product)
+- Detailed description
+- Suggested action
+
+<Note>
+The executive summary shows the first 4 active alerts. To view all alerts with filtering and management options, navigate to the **Alerts Center** page.
+</Note>
+
+## Portfolio Status Metrics
+
+The bottom section provides customer portfolio health indicators:
+
+```python
+with col_x:
+    st.metric("Clientes activos",    kc["clientes_activos_periodo"],
+              delta=f"+{kc['clientes_nuevos']} nuevos")
+with col_y:
+    st.metric("Clientes en riesgo",
+              len(kcli[kcli["flag_en_riesgo"] == True]) if not kcli.empty else 0,
+              delta=f"-{kc['clientes_perdidos']} perdidos",
+              delta_color="inverse")
+```
+
+## Usage Tips
+
+<AccordionGroup>
+  <Accordion title="How to interpret the compliance gauge">
+    - **Green zone (>90%)**: Team exceeding expectations
+    - **Yellow zone (70-90%)**: Acceptable performance, room for improvement
+    - **Red zone (less than 70%)**: Requires immediate attention and action
+  </Accordion>
+  
+  <Accordion title="Best practices for executive review">
+    1. Start with the compliance percentage to assess overall health
+    2. Check alerts for any critical issues requiring immediate action
+    3. Review the evolution chart to identify trends
+    4. Examine top rankings to recognize high performers
+    5. Use filters to drill down into specific zones or time periods
+  </Accordion>
+  
+  <Accordion title="Customizing the time period">
+    Use the sidebar date picker to select any custom range. The system automatically calculates the equivalent previous period for comparison purposes.
+  </Accordion>
+</AccordionGroup>
+
+## Related Pages
+
+- [Sales Team View](/features/sales-team-view) - Detailed team performance and ranking
+- [Alerts Center](/features/alerts-center) - Full alert management interface
+- [Customer Analysis](/features/customer-analysis) - Deep dive into customer portfolio

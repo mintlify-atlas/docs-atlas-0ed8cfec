@@ -1,0 +1,460 @@
+---
+title: Chart Components
+description: Plotly chart functions with consistent theming for sales analysis, vendor performance, and customer insights
+---
+
+The `charts` module provides pre-configured Plotly chart functions that follow the dashboard's visual theme. All functions return `go.Figure` objects ready to display with `st.plotly_chart()`.
+
+## Overview
+
+All charts include:
+- Consistent color scheme from `config.COLORS`
+- Dark theme with customized grid and axis colors
+- Hover templates with formatted values
+- Responsive layouts
+- Interactive legends and annotations
+
+## Sales Evolution Charts
+
+### chart_evolucion_ventas
+
+```python
+chart_evolucion_ventas(
+    df_mensual: pd.DataFrame,
+    mostrar_objetivo: bool = True,
+    title: str = "Evolución de Ventas vs Objetivo",
+) -> go.Figure
+```
+
+Creates a line chart with filled area showing monthly sales evolution with optional goal line.
+
+<ParamField path="df_mensual" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `periodo_str` or `periodo`: Month labels for x-axis
+  - `importe`: Sales amount values
+  - `objetivo` (optional): Goal values if `mostrar_objetivo=True`
+</ParamField>
+
+<ParamField path="mostrar_objetivo" type="bool" default="True">
+  Whether to display the goal line as a dotted orange line
+</ParamField>
+
+<ParamField path="title" type="str" default="Evolución de Ventas vs Objetivo">
+  Chart title
+</ParamField>
+
+#### Features
+
+- Filled area under sales curve with semi-transparent blue
+- Line + markers for sales data points
+- Dotted line for objectives in warning color
+- Automatic annotation of maximum value
+- Unified hover mode for comparing sales vs goal
+
+#### Example Usage
+
+```python
+from components.charts import chart_evolucion_ventas
+
+# app.py:190-191
+fig_evo = chart_evolucion_ventas(evo, mostrar_objetivo=True)
+st.plotly_chart(fig_evo, use_container_width=True, config={"displayModeBar": False})
+```
+
+```python
+# pages/2_vendedores.py:145-150
+fig_evo = chart_evolucion_ventas(
+    evo,
+    mostrar_objetivo=True,
+    title=f"Evolución personal — últimos 6 meses",
+)
+st.plotly_chart(fig_evo, use_container_width=True)
+```
+
+---
+
+## Vendor Performance Charts
+
+### chart_barras_vendedores
+
+```python
+chart_barras_vendedores(
+    df_vendedores: pd.DataFrame,
+    title: str = "Cumplimiento por Vendedor",
+) -> go.Figure
+```
+
+Horizontal bar chart showing vendor achievement percentages with traffic light colors.
+
+<ParamField path="df_vendedores" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `cumplimiento_pct`: Achievement as decimal (e.g., 0.95 for 95%)
+  - `nombre_vendedor` or `id_vendedor`: Vendor names
+  - `color_semaforo` (optional): Bar colors (auto-generated if missing)
+</ParamField>
+
+<ParamField path="title" type="str" default="Cumplimiento por Vendedor">
+  Chart title
+</ParamField>
+
+#### Features
+
+- Sorted by achievement (lowest to highest)
+- Color-coded bars based on performance thresholds
+- Vertical line at 100% (goal) in green
+- Vertical line at 80% (warning threshold) in orange
+- Percentage labels displayed outside bars
+- Dynamic height based on number of vendors (45px per vendor, minimum 300px)
+
+#### Example Usage
+
+```python
+from components.charts import chart_barras_vendedores
+
+# pages/1_gerencia.py:89-90
+fig_bar = chart_barras_vendedores(kv_df, title="Cumplimiento por Vendedor")
+st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
+```
+
+---
+
+### chart_gauge_cumplimiento
+
+```python
+chart_gauge_cumplimiento(
+    valor: float,
+    label: str = "Cumplimiento",
+    max_val: float = 1.20,
+) -> go.Figure
+```
+
+Semicircular gauge chart showing achievement percentage with color zones.
+
+<ParamField path="valor" type="float" required>
+  Achievement value as decimal (e.g., 0.85 for 85%)
+</ParamField>
+
+<ParamField path="label" type="str" default="Cumplimiento">
+  Chart title/label
+</ParamField>
+
+<ParamField path="max_val" type="float" default="1.20">
+  Maximum value for gauge scale (as decimal, default 120%)
+</ParamField>
+
+#### Color Zones
+
+- **Red zone**: 0-80% (rgba danger color)
+- **Orange zone**: 80-100% (rgba warning color)
+- **Green zone**: 100%+ (rgba success color)
+- **Threshold line**: Green line at 100%
+
+#### Features
+
+- Large percentage display (32px font)
+- Delta vs 100% goal with "pp vs obj" suffix
+- Semi-transparent colored zones
+- Fixed height: 280px
+
+#### Example Usage
+
+```python
+from components.charts import chart_gauge_cumplimiento
+
+# app.py:174-178
+fig_gauge = chart_gauge_cumplimiento(
+    valor = kv.get("cumplimiento_pct") or 0,
+    label = "Cumplimiento General",
+)
+st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
+```
+
+---
+
+## Pareto Analysis
+
+### chart_pareto
+
+```python
+chart_pareto(
+    df_pareto: pd.DataFrame,
+    titulo: str = "Análisis Pareto",
+    col_nombre: str = "razon_social",
+    col_valor: str = "importe_total",
+    top_n: int = 30,
+) -> go.Figure
+```
+
+Combined bar and line chart for Pareto analysis with 80/20 reference line.
+
+<ParamField path="df_pareto" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - Column specified by `col_nombre`: Entity names
+  - `participacion_pct`: Individual participation percentage
+  - `acumulado_pct`: Cumulative percentage
+  - `categoria_pareto` (optional): Categories A/B/C for color coding
+</ParamField>
+
+<ParamField path="titulo" type="str" default="Análisis Pareto">
+  Chart title
+</ParamField>
+
+<ParamField path="col_nombre" type="str" default="razon_social">
+  Column name for x-axis labels
+</ParamField>
+
+<ParamField path="col_valor" type="str" default="importe_total">
+  Column name for values (used for tooltip context)
+</ParamField>
+
+<ParamField path="top_n" type="int" default="30">
+  Number of top entities to display
+</ParamField>
+
+#### Color Coding
+
+- **Category A**: Green (success) - Top contributors
+- **Category B**: Orange (warning) - Medium contributors  
+- **Category C**: Gray (text_secondary) - Low contributors
+
+#### Features
+
+- Dual y-axes: participation % (left) and cumulative % (right)
+- Horizontal line at 80% cumulative threshold
+- Unified hover showing both metrics
+- Right axis range: 0-105%
+
+#### Example Usage
+
+```python
+from components.charts import chart_pareto
+
+# pages/3_clientes.py:104-111
+fig_pareto = chart_pareto(
+    df_cli_filtrado,
+    titulo     = "Pareto de Clientes",
+    col_nombre = "razon_social",
+    col_valor  = "importe_total",
+    top_n      = 30,
+)
+st.plotly_chart(fig_pareto, use_container_width=True)
+```
+
+---
+
+## Customer & Product Analysis
+
+### chart_scatter_clientes
+
+```python
+chart_scatter_clientes(
+    df_clientes: pd.DataFrame,
+    title: str = "Clientes: Frecuencia vs Importe",
+) -> go.Figure
+```
+
+Scatter plot analyzing customer frequency vs total amount, sized by ticket average and colored by Pareto category.
+
+<ParamField path="df_clientes" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `frecuencia_compra`: Number of purchases
+  - `importe_total`: Total sales amount
+  - `ticket_promedio` (optional): Average ticket (for marker size)
+  - `categoria_pareto` (optional): A/B/C categories
+  - `razon_social` or `id_cliente`: Customer names
+</ParamField>
+
+<ParamField path="title" type="str" default="Clientes: Frecuencia vs Importe">
+  Chart title
+</ParamField>
+
+#### Features
+
+- Marker size represents ticket average (5-30px range)
+- Color-coded by Pareto category (A=green, B=orange, C=gray)
+- Border around markers for clarity
+- Customer name in hover tooltip
+- Legend shows category breakdown
+
+#### Example Usage
+
+```python
+from components.charts import chart_scatter_clientes
+
+# pages/3_clientes.py:114-115
+fig_scatter = chart_scatter_clientes(df_cli_filtrado)
+st.plotly_chart(fig_scatter, use_container_width=True)
+```
+
+---
+
+### chart_treemap_productos
+
+```python
+chart_treemap_productos(
+    df_productos: pd.DataFrame,
+    title: str = "Productos por Categoría",
+) -> go.Figure
+```
+
+Hierarchical treemap showing products grouped by category, sized by sales and colored by growth rate.
+
+<ParamField path="df_productos" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `importe_total`: Sales amount (determines box size)
+  - `descripcion`: Product names
+  - `categoria` (optional): Product categories for hierarchy
+  - `vs_periodo_anterior` (optional): Growth rate as decimal
+</ParamField>
+
+<ParamField path="title" type="str" default="Productos por Categoría">
+  Chart title
+</ParamField>
+
+#### Color Scale
+
+- **Red**: Negative growth (up to -50%)
+- **Neutral**: No change (0%)
+- **Green**: Positive growth (up to +50%)
+- Values clipped to -50% to +50% range
+
+#### Example Usage
+
+```python
+from components.charts import chart_treemap_productos
+
+fig_tree = chart_treemap_productos(productos_df, title="Ventas por Producto")
+st.plotly_chart(fig_tree, use_container_width=True)
+```
+
+---
+
+## Activity Analysis
+
+### chart_heatmap_ventas
+
+```python
+chart_heatmap_ventas(
+    df: pd.DataFrame,
+    title: str = "Actividad comercial por día",
+) -> go.Figure
+```
+
+Heatmap showing sales activity by day of week and week of month.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `fecha`: Date column (datetime)
+  - `importe_neto`: Sales amount
+</ParamField>
+
+<ParamField path="title" type="str" default="Actividad comercial por día">
+  Chart title
+</ParamField>
+
+#### Features
+
+- Y-axis: Days of week (Mon-Sun in Spanish)
+- X-axis: Week of month (Sem 1-5)
+- Color scale: dark → primary → success (low to high sales)
+- Automatic grouping and aggregation
+
+#### Example Usage
+
+```python
+from components.charts import chart_heatmap_ventas
+
+# pages/1_gerencia.py:101-102
+fig_heat = chart_heatmap_ventas(df, title="Actividad comercial del equipo")
+st.plotly_chart(fig_heat, use_container_width=True)
+```
+
+---
+
+### chart_donut_canales
+
+```python
+chart_donut_canales(
+    df: pd.DataFrame,
+    title: str = "Distribución por Canal",
+) -> go.Figure
+```
+
+Donut chart showing sales distribution across channels.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `canal`: Channel names
+  - `importe_neto`: Sales amounts
+</ParamField>
+
+<ParamField path="title" type="str" default="Distribución por Canal">
+  Chart title
+</ParamField>
+
+#### Features
+
+- Hole size: 0.55 (55% donut hole)
+- Sequential color scheme from `COLORS["chart_seq"]`
+- Hover shows value and percentage
+- Fixed height: 300px
+
+#### Example Usage
+
+```python
+from components.charts import chart_donut_canales
+
+# app.py:299-300
+fig_donut = chart_donut_canales(df)
+st.plotly_chart(fig_donut, use_container_width=True)
+```
+
+---
+
+## Theme System
+
+### _apply_theme (Internal)
+
+```python
+_apply_theme(fig: go.Figure, title: str = "") -> go.Figure
+```
+
+Internal function that applies consistent theming to all charts. You don't need to call this directly.
+
+#### Applied Styles
+
+- Paper background: `PLOTLY_THEME["paper_bgcolor"]`
+- Plot background: `PLOTLY_THEME["plot_bgcolor"]`
+- Font: Inter, sans-serif
+- Grid color: `COLORS["border"]`
+- Axis colors: `COLORS["text_secondary"]`
+- Legend: Card background with border
+- Margins: Compact (l=40, r=40, t=50, b=40)
+
+## Dependencies
+
+```python
+import plotly.graph_objects as go
+import plotly.express as px
+import pandas as pd
+import numpy as np
+from config import COLORS, PLOTLY_THEME, fmt_moneda
+```
+
+## Chart Configuration
+
+When displaying charts, use:
+
+```python
+st.plotly_chart(
+    fig,
+    use_container_width=True,
+    config={"displayModeBar": False}  # Hide Plotly toolbar
+)
+```
+
+## Related
+
+- [KPI Cards](/api/components/kpi-card) - Card components for metrics
+- [Rankings](/api/components/rankings) - Table components
+- [Configuration](/development/architecture) - Theme and color definitions

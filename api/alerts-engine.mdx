@@ -1,0 +1,315 @@
+---
+title: 'Alerts Engine'
+description: 'Commercial alerts and opportunities detection system'
+---
+
+## Overview
+
+The Alerts Engine (`alerts_engine.py`) evaluates business rules and detects commercial alerts and opportunities. It implements 7 predefined rules covering performance issues, customer risks, and growth opportunities.
+
+## Import
+
+```python
+from src.alerts_engine import get_alertas_activas, ALERT_RULES
+```
+
+---
+
+## Main Function
+
+### get_alertas_activas
+
+Evaluates all alert rules and returns a DataFrame of active alerts.
+
+```python
+def get_alertas_activas(
+    df: pd.DataFrame,
+    df_anterior: pd.DataFrame | None,
+    clientes_df: pd.DataFrame,
+    productos_df: pd.DataFrame,
+    objetivos_df: pd.DataFrame | None = None,
+    fecha_hasta: date | None = None,
+) -> pd.DataFrame
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Filtered sales DataFrame for current period
+</ParamField>
+
+<ParamField path="df_anterior" type="pd.DataFrame | None" required>
+  Sales DataFrame from previous period (can be None)
+</ParamField>
+
+<ParamField path="clientes_df" type="pd.DataFrame" required>
+  Master customers DataFrame with `activo` flag
+</ParamField>
+
+<ParamField path="productos_df" type="pd.DataFrame" required>
+  Master products DataFrame with `activo` flag
+</ParamField>
+
+<ParamField path="objetivos_df" type="pd.DataFrame | None" default="None">
+  Goals DataFrame for salesperson performance evaluation
+</ParamField>
+
+<ParamField path="fecha_hasta" type="date | None" default="None">
+  Reference date for calculations (defaults to today)
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame with columns:
+  - `id_alerta`: Alert rule ID (ALT001-ALT007)
+  - `nombre`: Alert name
+  - `severidad`: Severity level (alta/media/baja/info)
+  - `entidad_tipo`: Entity type (vendedor/cliente/producto/equipo)
+  - `entidad_id`: Entity identifier
+  - `entidad_nombre`: Entity display name
+  - `valor_actual`: Current value that triggered the alert
+  - `valor_referencia`: Reference threshold value
+  - `descripcion_detalle`: Detailed description
+  - `fecha_deteccion`: Detection date
+  - `accion_sugerida`: Suggested action to take
+
+  Sorted by severity (alta → media → baja → info)
+</ResponseField>
+
+**Example:**
+
+```python
+from datetime import date
+from src.alerts_engine import get_alertas_activas
+from src.data_loader import load_data
+
+data = load_data()
+alertas = get_alertas_activas(
+    df=ventas_actuales,
+    df_anterior=ventas_mes_anterior,
+    clientes_df=data['clientes'],
+    productos_df=data['productos'],
+    objetivos_df=data['objetivos'],
+    fecha_hasta=date.today()
+)
+
+print(f"Total alerts: {len(alertas)}")
+print(f"Critical: {len(alertas[alertas['severidad']=='alta'])}")
+
+# Display critical alerts
+for _, alert in alertas[alertas['severidad']=='alta'].iterrows():
+    print(f"🔴 {alert['nombre']}: {alert['entidad_nombre']}")
+    print(f"   {alert['descripcion_detalle']}")
+    print(f"   Action: {alert['accion_sugerida']}")
+```
+
+---
+
+## Alert Rules Reference
+
+The system implements 7 predefined alert rules available in the `ALERT_RULES` constant:
+
+### ALT001: Vendedor bajo rendimiento crítico
+
+**Severity:** `alta` (High)
+
+**Condition:** Salesperson with goal achievement less than 65% in the last 30 days
+
+**Entity Type:** `vendedor`
+
+**Suggested Action:** Review portfolio and goals with supervisor
+
+**Trigger Logic:**
+- Calculates sales vs goal for last 30 days
+- Alerts if cumplimiento_pct < 0.65
+
+---
+
+### ALT002: Cliente sin compras (riesgo de pérdida)
+
+**Severity:** `media` (Medium)
+
+**Condition:** Active customer with no purchases in the last 45 days
+
+**Entity Type:** `cliente`
+
+**Suggested Action:** Urgent recovery contact
+
+**Trigger Logic:**
+- Checks last purchase date for each active customer
+- Alerts if >45 days without purchases
+
+---
+
+### ALT003: Caída de venta en cliente relevante
+
+**Severity:** `alta` (High)
+
+**Condition:** Category A customer with >25% sales decline vs previous month
+
+**Entity Type:** `cliente`
+
+**Suggested Action:** Key account visit
+
+**Trigger Logic:**
+- Calculates Pareto categories
+- For category A customers, compares current vs previous period
+- Alerts if decline >25%
+
+---
+
+### ALT004: Producto sin movimiento
+
+**Severity:** `baja` (Low)
+
+**Condition:** Active product with no sales in 60 days
+
+**Entity Type:** `producto`
+
+**Suggested Action:** Review availability and commercial push
+
+**Trigger Logic:**
+- Checks last sale date for each active product
+- Alerts if >60 days without sales
+
+---
+
+### ALT005: Vendedor sin actividad reciente
+
+**Severity:** `media` (Medium)
+
+**Condition:** Salesperson with no transactions in the last 7 business days
+
+**Entity Type:** `vendedor`
+
+**Suggested Action:** Verify field activity
+
+**Trigger Logic:**
+- Calculates 7 business days back (excluding weekends)
+- Alerts if no sales activity since then
+
+---
+
+### ALT006: Oportunidad: cliente B en crecimiento
+
+**Severity:** `info` (Informational)
+
+**Condition:** Category B customer with >30% growth vs previous month
+
+**Entity Type:** `cliente`
+
+**Suggested Action:** Potential for upgrade to category A — increase visit frequency
+
+**Trigger Logic:**
+- Identifies category B customers
+- Calculates growth vs previous period
+- Alerts if growth >30% (opportunity)
+
+---
+
+### ALT007: Equipo cerca del objetivo mensual
+
+**Severity:** `info` (Informational)
+
+**Condition:** Overall achievement >85% with >5 business days remaining
+
+**Entity Type:** `equipo`
+
+**Suggested Action:** Final push to close month in green
+
+**Trigger Logic:**
+- Calculates total team achievement for current month
+- Counts remaining business days
+- Alerts if >85% achieved and >5 days left
+
+---
+
+## Severity Levels
+
+<ResponseField name="alta" type="High">
+  🔴 Critical issues requiring immediate attention (performance problems, major customer risks)
+</ResponseField>
+
+<ResponseField name="media" type="Medium">
+  🟡 Important issues requiring action within days (inactive customers, inactive salespeople)
+</ResponseField>
+
+<ResponseField name="baja" type="Low">
+  🔵 Minor issues for monitoring (inactive products)
+</ResponseField>
+
+<ResponseField name="info" type="Informational">
+  🟢 Positive opportunities and insights (growth opportunities, goal proximity)
+</ResponseField>
+
+---
+
+## Usage Examples
+
+### Filter Alerts by Severity
+
+```python
+# Get only critical alerts
+critical = alertas[alertas['severidad'] == 'alta']
+
+# Get actionable alerts (high + medium)
+actionable = alertas[alertas['severidad'].isin(['alta', 'media'])]
+
+# Get opportunities
+oportunidades = alertas[alertas['severidad'] == 'info']
+```
+
+### Filter Alerts by Entity Type
+
+```python
+# Customer-related alerts
+alertas_clientes = alertas[alertas['entidad_tipo'] == 'cliente']
+
+# Salesperson alerts
+alertas_vendedores = alertas[alertas['entidad_tipo'] == 'vendedor']
+
+# Team-level alerts
+alertas_equipo = alertas[alertas['entidad_tipo'] == 'equipo']
+```
+
+### Display Alert Summary
+
+```python
+def mostrar_resumen_alertas(alertas_df):
+    """Display alert summary by severity."""
+    summary = alertas_df.groupby('severidad').size()
+    
+    icons = {'alta': '🔴', 'media': '🟡', 'baja': '🔵', 'info': '🟢'}
+    
+    for sev, count in summary.items():
+        icon = icons.get(sev, '⚪')
+        print(f"{icon} {sev.upper()}: {count} alerts")
+    
+    return summary
+
+# Usage
+mostrar_resumen_alertas(alertas)
+```
+
+### Alert Notifications
+
+```python
+# Send notifications for critical alerts
+for _, alert in alertas[alertas['severidad']=='alta'].iterrows():
+    mensaje = f"""
+    ALERTA CRÍTICA: {alert['nombre']}
+    Entidad: {alert['entidad_nombre']}
+    Detalle: {alert['descripcion_detalle']}
+    Acción: {alert['accion_sugerida']}
+    """
+    # send_notification(mensaje)  # Your notification function
+    print(mensaje)
+```
+
+---
+
+## Notes
+
+- The engine evaluates all rules on every call - no persistence or state
+- Business days exclude weekends (Monday-Friday)
+- All monetary comparisons use `importe_neto` column
+- Pareto categories are recalculated for each evaluation
+- Empty DataFrames are handled gracefully (returns empty alerts DataFrame)
+- Alerts are always sorted by severity (alta → media → baja → info)

@@ -1,0 +1,348 @@
+---
+title: Alert Rules Reference
+description: Complete documentation of all 7 alert rules and their evaluation logic
+---
+
+## Rule Definitions
+
+The alerts engine evaluates 7 distinct business rules, each targeting specific performance issues or opportunities.
+
+## Critical Performance Alerts
+
+<AccordionGroup>
+  <Accordion title="ALT001: Vendedor bajo rendimiento crítico" icon="triangle-exclamation">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT001 |
+| **Name** | Vendedor bajo rendimiento crítico |
+| **Severity** | `alta` (critical) |
+| **Entity Type** | `vendedor` (salesperson) |
+| **Condition** | cumplimiento_pct < 0.65 en los últimos 30 días |
+| **Suggested Action** | Revisar cartera y objetivos con supervisor |
+
+### Evaluation Logic
+
+```python
+# Filter to last 30 days
+desde_30 = ts_hoy - pd.Timedelta(days=30)
+df_30 = df[df["fecha"] >= desde_30]
+
+# Get monthly targets
+obj_mes = _get_objetivo_mes(objetivos_df, hoy)
+
+# Sum sales by salesperson
+vend_ventas = df_30.groupby("id_vendedor")["importe_neto"].sum()
+
+for vend_id, importe in vend_ventas.items():
+    obj = obj_mes.get(vend_id, 0)
+    if obj > 0:
+        cumpl = importe / obj
+        if cumpl < 0.65:  # Threshold: 65%
+            # Create alert with:
+            # - valor_actual: cumpl (e.g., 0.52)
+            # - valor_referencia: 0.65
+            # - detalle: "Cumplimiento: 52.0% (umbral: 65%)"
+```
+
+### When to Act
+
+This alert indicates **severe underperformance** requiring immediate management intervention. The salesperson is at risk of missing monthly targets significantly.
+
+### Example Output
+
+```
+Entidad: Juan Pérez (V001)
+Valor actual: 0.52 (52%)
+Umbral: 0.65 (65%)
+Detalle: "Cumplimiento: 52.0% (umbral: 65%)"
+Acción: Revisar cartera y objetivos con supervisor
+```
+
+  </Accordion>
+
+  <Accordion title="ALT003: Caída de venta en cliente relevante" icon="chart-line-down">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT003 |
+| **Name** | Caída de venta en cliente relevante |
+| **Severity** | `alta` (critical) |
+| **Entity Type** | `cliente` (customer) |
+| **Condition** | cliente categoría A con caída >25% vs mes anterior |
+| **Suggested Action** | Visita de cuenta clave |
+
+### Evaluation Logic
+
+```python
+from src.pareto import calcular_pareto
+
+# Calculate Pareto categories for current period
+grp_act = df.groupby("id_cliente")["importe_neto"].sum().reset_index()
+grp_act = calcular_pareto(grp_act, "importe_actual", "id_cliente")
+cat_A = set(grp_act[grp_act["categoria_pareto"] == "A"]["id_cliente"])
+
+# Get previous period sales
+grp_ant = df_anterior.groupby("id_cliente")["importe_neto"].sum()
+
+for cli_id in cat_A:
+    imp_act = grp_act[grp_act["id_cliente"] == cli_id]["importe_actual"].values[0]
+    imp_ant = grp_ant.get(cli_id, 0)
+    
+    if imp_ant > 0:
+        delta = (imp_act - imp_ant) / imp_ant
+        if delta < -0.25:  # More than 25% decline
+            # Create alert with:
+            # - valor_actual: delta (e.g., -0.32)
+            # - valor_referencia: -0.25
+            # - detalle: "Caída: -32.0% ($150,000 → $102,000)"
+```
+
+### When to Act
+
+Category A customers represent the **top 20% by revenue**. A significant drop signals relationship issues, competitive pressure, or changing needs requiring immediate key account management.
+
+  </Accordion>
+</AccordionGroup>
+
+## Risk Detection Alerts
+
+<AccordionGroup>
+  <Accordion title="ALT002: Cliente sin compras (riesgo de pérdida)" icon="user-slash">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT002 |
+| **Name** | Cliente sin compras (riesgo de pérdida) |
+| **Severity** | `media` (medium) |
+| **Entity Type** | `cliente` (customer) |
+| **Condition** | cliente activo sin compras en los últimos 45 días |
+| **Suggested Action** | Contacto de recuperación urgente |
+
+### Evaluation Logic
+
+```python
+# Find last purchase date per customer
+ultima_compra = df.groupby("id_cliente")["fecha"].max()
+corte_45 = ts_hoy - pd.Timedelta(days=45)
+
+# Get active customers from master data
+clientes_activos = set(clientes_df[clientes_df["activo"] == True]["id_cliente"])
+
+for cli_id in clientes_activos:
+    uc = ultima_compra.get(cli_id)
+    if uc is None or uc < corte_45:
+        dias = (ts_hoy - uc).days if uc is not None else 999
+        # Create alert with:
+        # - valor_actual: dias (e.g., 52)
+        # - valor_referencia: 45
+        # - detalle: "Sin compras hace 52 días"
+```
+
+### When to Act
+
+45 days without activity suggests **churn risk**. Proactive outreach can recover the relationship before the customer is permanently lost.
+
+  </Accordion>
+
+  <Accordion title="ALT005: Vendedor sin actividad reciente" icon="user-clock">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT005 |
+| **Name** | Vendedor sin actividad reciente |
+| **Severity** | `media` (medium) |
+| **Entity Type** | `vendedor` (salesperson) |
+| **Condition** | vendedor sin transacciones en los últimos 7 días hábiles |
+| **Suggested Action** | Verificar actividad de campo |
+
+### Evaluation Logic
+
+```python
+# Calculate 7 business days back
+dias_habiles_7 = _retroceder_dias_habiles(hoy, 7)
+
+ultima_actividad = df.groupby("id_vendedor")["fecha"].max()
+vendedores_activos = df["id_vendedor"].unique()
+
+for vend_id in vendedores_activos:
+    ua = ultima_actividad.get(vend_id)
+    if ua is None or ua.date() < dias_habiles_7:
+        # Create alert with:
+        # - valor_actual: days since last activity
+        # - valor_referencia: 7
+        # - detalle: "Última venta: 2026-02-28"
+```
+
+### When to Act
+
+A full business week without transactions may indicate **field issues**, vacation, illness, or lack of pipeline. Requires supervisor check-in.
+
+  </Accordion>
+</AccordionGroup>
+
+## Low-Priority Alerts
+
+<AccordionGroup>
+  <Accordion title="ALT004: Producto sin movimiento" icon="box">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT004 |
+| **Name** | Producto sin movimiento |
+| **Severity** | `baja` (low) |
+| **Entity Type** | `producto` (product) |
+| **Condition** | producto activo sin ventas en 60 días |
+| **Suggested Action** | Revisar disponibilidad y push comercial |
+
+### Evaluation Logic
+
+```python
+ultima_venta_prod = df.groupby("id_producto")["fecha"].max()
+corte_60 = ts_hoy - pd.Timedelta(days=60)
+
+productos_activos = productos_df[productos_df["activo"] == True]["id_producto"]
+
+for prd_id in productos_activos:
+    uv = ultima_venta_prod.get(prd_id)
+    if uv is None or uv < corte_60:
+        dias = (ts_hoy - uv).days if uv is not None else 999
+        # Create alert with:
+        # - valor_actual: dias
+        # - valor_referencia: 60
+        # - detalle: "Sin ventas hace 78 días"
+```
+
+### When to Act
+
+Stagnant products may indicate **inventory issues**, obsolescence, or lack of promotion. Review availability and consider sales push or discontinuation.
+
+  </Accordion>
+</AccordionGroup>
+
+## Opportunity Alerts
+
+<AccordionGroup>
+  <Accordion title="ALT006: Oportunidad: cliente B en crecimiento" icon="arrow-trend-up">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT006 |
+| **Name** | Oportunidad: cliente B en crecimiento |
+| **Severity** | `info` (opportunity) |
+| **Entity Type** | `cliente` (customer) |
+| **Condition** | cliente categoría B con crecimiento >30% vs mes anterior |
+| **Suggested Action** | Potencial para upgrade a categoría A — aumentar frecuencia de visita |
+
+### Evaluation Logic
+
+```python
+from src.pareto import calcular_pareto
+
+grp_act = df.groupby("id_cliente")["importe_neto"].sum().reset_index()
+grp_act = calcular_pareto(grp_act, "importe_actual", "id_cliente")
+cat_B = set(grp_act[grp_act["categoria_pareto"] == "B"]["id_cliente"])
+
+grp_ant = df_anterior.groupby("id_cliente")["importe_neto"].sum()
+
+for cli_id in cat_B:
+    imp_act = grp_act[grp_act["id_cliente"] == cli_id]["importe_actual"].values[0]
+    imp_ant = grp_ant.get(cli_id, 0)
+    
+    if imp_ant > 0:
+        delta = (imp_act - imp_ant) / imp_ant
+        if delta > 0.30:  # More than 30% growth
+            # Create alert with:
+            # - valor_actual: delta (e.g., 0.45)
+            # - valor_referencia: 0.30
+            # - detalle: "Crecimiento: +45.0%"
+```
+
+### When to Act
+
+Category B customers showing strong growth have **upgrade potential**. Increasing visit frequency and support can accelerate their path to Category A status.
+
+  </Accordion>
+
+  <Accordion title="ALT007: Equipo cerca del objetivo mensual" icon="bullseye">
+    
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **ID** | ALT007 |
+| **Name** | Equipo cerca del objetivo mensual |
+| **Severity** | `info` (opportunity) |
+| **Entity Type** | `equipo` (team) |
+| **Condition** | cumplimiento general >85% y quedan más de 5 días hábiles |
+| **Suggested Action** | Push final para cerrar mes en verde |
+
+### Evaluation Logic
+
+```python
+# Get total monthly target
+obj_total = objetivos_df[
+    objetivos_df["periodo"].dt.month == hoy.month
+]["objetivo"].sum()
+
+# Get month-to-date sales
+ventas_mes = df[df["fecha"].dt.month == hoy.month]["importe_neto"].sum()
+
+cumpl_general = ventas_mes / obj_total if obj_total > 0 else 0
+dias_habiles_restantes = _dias_habiles_restantes_mes(hoy)
+
+if cumpl_general > 0.85 and dias_habiles_restantes > 5:
+    # Create alert with:
+    # - entidad_id: "EQUIPO"
+    # - entidad_nombre: "Equipo Comercial"
+    # - valor_actual: cumpl_general (e.g., 0.87)
+    # - valor_referencia: 0.85
+    # - detalle: "Cumplimiento: 87.0% | Días hábiles restantes: 8"
+```
+
+### When to Act
+
+The team is **within striking distance** of the monthly goal with time remaining. A coordinated push can ensure target achievement and build momentum.
+
+  </Accordion>
+</AccordionGroup>
+
+## Rule Configuration
+
+All rules are defined in the `ALERT_RULES` constant:
+
+```python
+ALERT_RULES = [
+    {
+        "id":              "ALT001",
+        "nombre":          "Vendedor bajo rendimiento crítico",
+        "condicion":       "cumplimiento_pct < 0.65 en los últimos 30 días",
+        "severidad":       "alta",
+        "entidad_tipo":    "vendedor",
+        "accion_sugerida": "Revisar cartera y objetivos con supervisor",
+    },
+    # ... 6 more rules
+]
+```
+
+<Note>
+Rule definitions are **hard-coded** in `alerts_engine.py`. To modify thresholds or add new rules, edit the source code and redeploy.
+</Note>
+
+## Next Steps
+
+<Card title="Severity Levels" icon="signal" href="./severity-levels">
+  Learn how alerts are prioritized and displayed
+</Card>

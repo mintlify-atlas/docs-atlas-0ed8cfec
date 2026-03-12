@@ -1,0 +1,488 @@
+---
+title: 'Reports'
+description: 'Export and report generation in text and Excel formats'
+---
+
+## Overview
+
+The Reports module (`reports.py`) generates formatted reports for export, including executive summaries in plain text and multi-sheet Excel workbooks.
+
+## Import
+
+```python
+from src.reports import generar_reporte_texto, generar_excel_reporte
+```
+
+---
+
+## Text Reports
+
+### generar_reporte_texto
+
+Generates an executive summary report in plain text format.
+
+```python
+def generar_reporte_texto(
+    kpi_ventas: dict,
+    kpi_vend_df: pd.DataFrame,
+    alertas_df: pd.DataFrame,
+    fecha_desde: date,
+    fecha_hasta: date,
+) -> str
+```
+
+<ParamField path="kpi_ventas" type="dict" required>
+  Sales KPIs dictionary from `kpi_ventas_periodo()`
+</ParamField>
+
+<ParamField path="kpi_vend_df" type="pd.DataFrame" required>
+  Salesperson KPIs DataFrame from `kpi_por_vendedor()`
+</ParamField>
+
+<ParamField path="alertas_df" type="pd.DataFrame" required>
+  Active alerts DataFrame from `get_alertas_activas()`
+</ParamField>
+
+<ParamField path="fecha_desde" type="date" required>
+  Period start date
+</ParamField>
+
+<ParamField path="fecha_hasta" type="date" required>
+  Period end date
+</ParamField>
+
+<ResponseField name="return" type="str">
+  Formatted multi-line text report with:
+  - Header with period dates
+  - Sales summary section (total, goal, achievement, transactions, average ticket)
+  - Salesperson ranking table
+  - Active alerts list with icons and details
+  - Footer with generation date
+</ResponseField>
+
+**Example:**
+
+```python
+from datetime import date
+from src.reports import generar_reporte_texto
+from src.kpi_engine import kpi_ventas_periodo, kpi_por_vendedor
+from src.alerts_engine import get_alertas_activas
+
+# Calculate KPIs
+kpis = kpi_ventas_periodo(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior,
+    objetivos_df=objetivos,
+    fecha_desde=date(2026, 3, 1),
+    fecha_hasta=date(2026, 3, 31)
+)
+
+vendedores = kpi_por_vendedor(
+    df=ventas_actuales,
+    objetivos_df=objetivos,
+    fecha_desde=date(2026, 3, 1),
+    fecha_hasta=date(2026, 3, 31)
+)
+
+alertas = get_alertas_activas(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior,
+    clientes_df=clientes_master,
+    productos_df=productos_master,
+    objetivos_df=objetivos
+)
+
+# Generate report
+reporte = generar_reporte_texto(
+    kpi_ventas=kpis,
+    kpi_vend_df=vendedores,
+    alertas_df=alertas,
+    fecha_desde=date(2026, 3, 1),
+    fecha_hasta=date(2026, 3, 31)
+)
+
+print(reporte)
+
+# Save to file
+with open('reporte_ejecutivo.txt', 'w', encoding='utf-8') as f:
+    f.write(reporte)
+```
+
+**Sample Output:**
+
+```
+============================================================
+  REPORTE EJECUTIVO — VISOR KPI COMERCIAL
+  Período: 01/03/2026 al 31/03/2026
+============================================================
+
+VENTAS DEL PERÍODO
+----------------------------------------
+  Importe total:    $1,245,680
+  Objetivo:         $1,200,000
+  Cumplimiento:     103.8%
+  Transacciones:    458
+  Ticket promedio:  $2,720
+
+RANKING VENDEDORES
+----------------------------------------
+  # 1 Juan Pérez                      105.2%  $325,400
+  # 2 María González                  102.3%  $298,550
+  # 3 Carlos Rodríguez                 98.1%  $256,780
+  # 4 Ana Martínez                     92.5%  $198,320
+  # 5 Luis Fernández                   85.7%  $166,630
+
+ALERTAS ACTIVAS (7)
+----------------------------------------
+  🔴 [ALT001] Vendedor bajo rendimiento crítico
+     → Luis Fernández: Cumplimiento: 62.3% (umbral: 65%)
+  🟡 [ALT002] Cliente sin compras (riesgo de pérdida)
+     → Distribuidora El Sol SA: Sin compras hace 52 días
+  🔴 [ALT003] Caída de venta en cliente relevante
+     → Mayorista Central: Caída: -28.5% ($45,000 → $32,175)
+  🟢 [ALT006] Oportunidad: cliente B en crecimiento
+     → Comercial Norte: Crecimiento: +35.2%
+
+============================================================
+  Generado: 12/03/2026
+============================================================
+```
+
+---
+
+## Excel Reports
+
+### generar_excel_reporte
+
+Generates a multi-sheet Excel workbook with detailed KPIs.
+
+```python
+def generar_excel_reporte(
+    kpi_vend_df: pd.DataFrame,
+    kpi_clientes_df: pd.DataFrame,
+    kpi_productos_df: pd.DataFrame,
+    alertas_df: pd.DataFrame,
+) -> bytes
+```
+
+<ParamField path="kpi_vend_df" type="pd.DataFrame" required>
+  Salesperson KPIs DataFrame from `kpi_por_vendedor()`
+</ParamField>
+
+<ParamField path="kpi_clientes_df" type="pd.DataFrame" required>
+  Customer KPIs DataFrame from `kpi_clientes()`
+</ParamField>
+
+<ParamField path="kpi_productos_df" type="pd.DataFrame" required>
+  Product KPIs DataFrame from `kpi_productos()`
+</ParamField>
+
+<ParamField path="alertas_df" type="pd.DataFrame" required>
+  Active alerts DataFrame from `get_alertas_activas()`
+</ParamField>
+
+<ResponseField name="return" type="bytes">
+  Excel file bytes ready for download or saving. Contains sheets:
+  - **Vendedores**: Salesperson performance metrics
+  - **Clientes**: Customer analysis with Pareto categories
+  - **Productos**: Product performance with Pareto
+  - **Alertas**: Active alerts and opportunities
+</ResponseField>
+
+**Example:**
+
+```python
+from src.reports import generar_excel_reporte
+from src.kpi_engine import kpi_por_vendedor, kpi_clientes, kpi_productos
+from src.alerts_engine import get_alertas_activas
+
+# Calculate all KPIs
+vendedores_kpi = kpi_por_vendedor(
+    df=ventas_actuales,
+    objetivos_df=objetivos,
+    fecha_desde=fecha_desde,
+    fecha_hasta=fecha_hasta
+)
+
+clientes_kpi = kpi_clientes(
+    df=ventas_actuales,
+    clientes_df=clientes_master,
+    df_anterior=ventas_anterior,
+    fecha_hasta=fecha_hasta
+)
+
+productos_kpi = kpi_productos(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior
+)
+
+alertas = get_alertas_activas(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior,
+    clientes_df=clientes_master,
+    productos_df=productos_master,
+    objetivos_df=objetivos
+)
+
+# Generate Excel
+excel_bytes = generar_excel_reporte(
+    kpi_vend_df=vendedores_kpi,
+    kpi_clientes_df=clientes_kpi,
+    kpi_productos_df=productos_kpi,
+    alertas_df=alertas
+)
+
+# Save to file
+with open('reporte_kpi.xlsx', 'wb') as f:
+    f.write(excel_bytes)
+
+print("✓ Excel report generated: reporte_kpi.xlsx")
+```
+
+**Streamlit Integration:**
+
+```python
+import streamlit as st
+from src.reports import generar_excel_reporte
+
+# ... calculate KPIs ...
+
+excel_bytes = generar_excel_reporte(
+    kpi_vend_df=vendedores_kpi,
+    kpi_clientes_df=clientes_kpi,
+    kpi_productos_df=productos_kpi,
+    alertas_df=alertas
+)
+
+st.download_button(
+    label="📥 Download Excel Report",
+    data=excel_bytes,
+    file_name=f"kpi_report_{date.today().strftime('%Y%m%d')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+```
+
+---
+
+## Complete Reporting Workflow
+
+```python
+from datetime import date
+from src.data_loader import get_filtered_data, get_filtered_data_periodo_anterior, load_data
+from src.kpi_engine import (
+    kpi_ventas_periodo,
+    kpi_por_vendedor,
+    kpi_clientes,
+    kpi_productos
+)
+from src.alerts_engine import get_alertas_activas
+from src.reports import generar_reporte_texto, generar_excel_reporte
+
+# Define period
+fecha_desde = date(2026, 3, 1)
+fecha_hasta = date(2026, 3, 31)
+
+# Load data
+data = load_data()
+ventas_actuales = get_filtered_data(fecha_desde, fecha_hasta)
+ventas_anterior = get_filtered_data_periodo_anterior(fecha_desde, fecha_hasta)
+
+# Calculate all KPIs
+kpi_ventas = kpi_ventas_periodo(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior,
+    objetivos_df=data['objetivos'],
+    fecha_desde=fecha_desde,
+    fecha_hasta=fecha_hasta
+)
+
+kpi_vend = kpi_por_vendedor(
+    df=ventas_actuales,
+    objetivos_df=data['objetivos'],
+    df_anterior=ventas_anterior,
+    fecha_desde=fecha_desde,
+    fecha_hasta=fecha_hasta
+)
+
+kpi_cli = kpi_clientes(
+    df=ventas_actuales,
+    clientes_df=data['clientes'],
+    df_anterior=ventas_anterior,
+    fecha_hasta=fecha_hasta
+)
+
+kpi_prod = kpi_productos(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior
+)
+
+alertas = get_alertas_activas(
+    df=ventas_actuales,
+    df_anterior=ventas_anterior,
+    clientes_df=data['clientes'],
+    productos_df=data['productos'],
+    objetivos_df=data['objetivos'],
+    fecha_hasta=fecha_hasta
+)
+
+# Generate text report
+reporte_txt = generar_reporte_texto(
+    kpi_ventas=kpi_ventas,
+    kpi_vend_df=kpi_vend,
+    alertas_df=alertas,
+    fecha_desde=fecha_desde,
+    fecha_hasta=fecha_hasta
+)
+
+with open('reporte_ejecutivo.txt', 'w', encoding='utf-8') as f:
+    f.write(reporte_txt)
+
+# Generate Excel report
+excel_bytes = generar_excel_reporte(
+    kpi_vend_df=kpi_vend,
+    kpi_clientes_df=kpi_cli,
+    kpi_productos_df=kpi_prod,
+    alertas_df=alertas
+)
+
+with open('reporte_completo.xlsx', 'wb') as f:
+    f.write(excel_bytes)
+
+print("✓ Reports generated:")
+print("  - reporte_ejecutivo.txt")
+print("  - reporte_completo.xlsx")
+```
+
+---
+
+## Formatting Functions
+
+The reports module uses formatting functions from `config.py`:
+
+```python
+from config import fmt_moneda, fmt_pct, fmt_numero
+
+# Examples:
+fmt_moneda(1245680)   # "$1,245,680"
+fmt_pct(0.1038)       # "103.8%"
+fmt_numero(458)       # "458"
+```
+
+---
+
+## Alert Icons
+
+The text report uses emoji icons for alert severity:
+
+- 🔴 **alta** (High)
+- 🟡 **media** (Medium)
+- 🔵 **baja** (Low)
+- 🟢 **info** (Informational)
+
+---
+
+## Excel Engine
+
+The Excel generation uses **xlsxwriter** as the pandas ExcelWriter engine:
+
+```python
+with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    df.to_excel(writer, sheet_name="SheetName", index=False)
+```
+
+**Requirements:**
+```bash
+pip install xlsxwriter
+```
+
+---
+
+## Customization Examples
+
+### Custom Text Report Format
+
+```python
+def generar_reporte_custom(
+    kpi_ventas: dict,
+    kpi_vend_df: pd.DataFrame,
+    titulo: str = "REPORTE COMERCIAL"
+) -> str:
+    """Custom text report with different formatting."""
+    lineas = [
+        f"{'='*60}",
+        f"  {titulo}",
+        f"  Generado: {date.today().strftime('%d/%m/%Y %H:%M')}",
+        f"{'='*60}",
+        "",
+        f"💰 Ventas Totales: {fmt_moneda(kpi_ventas['importe_total'])}",
+        f"🎯 Objetivo: {fmt_moneda(kpi_ventas['objetivo_total'])}",
+        f"📊 Cumplimiento: {fmt_pct(kpi_ventas.get('cumplimiento_pct', 0))}",
+        "",
+        "🏆 TOP 3 VENDEDORES:",
+    ]
+    
+    for i, (_, row) in enumerate(kpi_vend_df.head(3).iterrows(), 1):
+        lineas.append(
+            f"{i}. {row['nombre_vendedor']}: "
+            f"{fmt_moneda(row['importe_total'])} "
+            f"({fmt_pct(row.get('cumplimiento_pct', 0))})"
+        )
+    
+    return "\n".join(lineas)
+```
+
+### Enhanced Excel with Formatting
+
+```python
+import pandas as pd
+import io
+
+def generar_excel_formateado(kpi_vend_df: pd.DataFrame) -> bytes:
+    """Excel report with custom formatting."""
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        kpi_vend_df.to_excel(writer, sheet_name='Vendedores', index=False)
+        
+        # Get workbook and worksheet objects
+        workbook = writer.book
+        worksheet = writer.sheets['Vendedores']
+        
+        # Define formats
+        money_fmt = workbook.add_format({'num_format': '$#,##0', 'align': 'right'})
+        pct_fmt = workbook.add_format({'num_format': '0.0%', 'align': 'right'})
+        header_fmt = workbook.add_format({
+            'bold': True,
+            'bg_color': '#4472C4',
+            'font_color': 'white',
+            'border': 1
+        })
+        
+        # Format header row
+        for col_num, value in enumerate(kpi_vend_df.columns.values):
+            worksheet.write(0, col_num, value, header_fmt)
+        
+        # Format money columns
+        worksheet.set_column('B:B', 15, money_fmt)  # importe_total
+        
+        # Format percentage columns
+        worksheet.set_column('F:F', 12, pct_fmt)  # cumplimiento_pct
+        
+        # Auto-fit other columns
+        worksheet.set_column('A:A', 12)  # id_vendedor
+        worksheet.set_column('C:E', 15)  # other columns
+    
+    return output.getvalue()
+```
+
+---
+
+## Notes
+
+- Text reports use UTF-8 encoding for proper emoji rendering
+- Excel generation handles empty DataFrames gracefully (skips empty sheets)
+- The `generar_excel_reporte()` function returns bytes, not a file path
+- All monetary values are formatted using `fmt_moneda()` from config
+- Percentage values are formatted using `fmt_pct()` (expects 0-1 range)
+- Text report layout is fixed-width for terminal display
+- Excel sheets preserve all DataFrame columns and data types

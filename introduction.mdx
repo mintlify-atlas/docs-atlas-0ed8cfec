@@ -1,0 +1,183 @@
+---
+title: Introduction
+description: Transform sales Excel spreadsheets into actionable business intelligence with Visor KPI Comercial
+---
+
+## What is Visor KPI Comercial?
+
+Visor KPI Comercial is a **sales intelligence dashboard** that transforms Excel sales data into automated KPIs and actionable insights. Built specifically for distribution companies, it eliminates manual analysis and centralizes commercial intelligence in a single, interactive dashboard.
+
+<Note>
+  Visor KPI Comercial reduces report generation time **from hours to seconds**, converting historical sales data into informed business decisions.
+</Note>
+
+## The Problem It Solves
+
+Many distribution companies still manage their commercial information across multiple Excel files, with:
+
+- **Manual reports** consuming hours of operational effort
+- **Dispersed data** making it difficult to make good business decisions quickly
+- **Delayed insights** arriving too late to prevent issues
+- **Human errors** introduced during consolidation
+
+**Visor KPI Comercial solves these challenges by:**
+
+- **Eliminating manual analysis** → Converts Excel sales files into automatically processed KPIs
+- **Centralizing commercial intelligence** → Managers and salespeople access their metrics from a single dashboard
+- **Anticipating problems** → An alert engine detects performance drops, at-risk clients, and growth opportunities before they impact results
+- **Democratizing data** → Each salesperson accesses their own individual report; management gets a consolidated view of the entire team
+
+## Key Business Questions Answered
+
+The system is designed to answer the questions that matter most to a sales team:
+
+<CardGroup cols={2}>
+  <Card title="Team Performance" icon="users">
+    Which salespeople are exceeding or falling below target?
+  </Card>
+  <Card title="Customer Intelligence" icon="store">
+    Which customers concentrate most of the revenue? Who is at risk of churning?
+  </Card>
+  <Card title="Product Analysis" icon="box">
+    Which products really drive the business? Where are the opportunities?
+  </Card>
+  <Card title="Actionable Alerts" icon="bell">
+    Which alerts require immediate action from the team?
+  </Card>
+</CardGroup>
+
+## System Capabilities
+
+### Business Intelligence Features
+
+**Automated ETL Pipeline**
+- Excel ingestion without manual configuration using `pandas` + `openpyxl`
+- Automatic detection of nulls, inconsistent dates, and outliers
+- Data normalization by channel, zone, and period
+
+**KPI Engine**
+
+Automated calculation of critical commercial indicators:
+
+| KPI | Description |
+|-----|-------------|
+| 💰 Period Sales | Total revenue by segment |
+| 📊 Gross Margin | Profitability by salesperson, customer, and product |
+| 🎯 Quota Achievement | % of monthly target achieved vs. goal |
+| 🌍 Portfolio Coverage | % of active customers over total assigned |
+| 📉 Period Variation | Absolute and relative delta MoM / YoY |
+| 🔄 Purchase Frequency | Recurrence by customer and channel |
+| 📦 Product Rotation | Active vs. inactive SKUs by period |
+
+**Pareto 80/20 Analysis**
+- Automatic classification of customers and products into **A / B / C** categories
+- Calculation of **Gini concentration index** for portfolio
+- Identification of customers generating 80% of revenue
+- Detection of low-rotation SKUs with potential stock issues
+
+**Intelligent Alert Engine**
+
+7 pre-configured business rules that trigger real-time alerts:
+
+| ID | Alert | Severity |
+|----|-------|----------|
+| ALT001 | Salesperson with achievement < 70% | 🔴 Critical |
+| ALT002 | Customer without purchase in last 30 days | 🟠 High |
+| ALT003 | Product with sales drop > 30% MoM | 🟠 High |
+| ALT004 | Customer portfolio with excessive concentration (Gini > 0.6) | 🟡 Medium |
+| ALT005 | Margin below minimum threshold | 🔴 Critical |
+| ALT006 | Portfolio coverage < 60% | 🟠 High |
+| ALT007 | Opportunity: customer with high frequency and low ticket | 🟢 Opportunity |
+
+## System Architecture
+
+Visor KPI Comercial follows a clean architecture with clear separation between layers:
+
+```
+visor_kpi/
+├── app.py                     # Executive Summary (main page)
+├── config.py                  # Colors, thresholds, formats
+├── requirements.txt
+│
+├── pages/                     # Multi-page views
+│   ├── 1_gerencia.py          # Consolidated management view
+│   ├── 2_vendedores.py        # Individual salesperson view
+│   ├── 3_clientes.py          # Customer portfolio analysis
+│   ├── 4_productos.py         # Product ranking and analysis
+│   └── 5_alertas.py           # Alerts and opportunities center
+│
+├── src/                       # Business logic core
+│   ├── data_loader.py         # ETL: reading, validation, filtering
+│   ├── kpi_engine.py          # KPI calculation engine
+│   ├── pareto.py              # 80/20 analysis and A/B/C classification
+│   ├── alerts_engine.py       # Alert engine (ALT001–ALT007)
+│   └── reports.py             # Exportable report generation
+│
+├── components/                # Reusable UI components
+│   ├── kpi_card.py            # KPI cards with traffic light indicator
+│   ├── charts.py              # Plotly visualizations
+│   ├── filters.py             # Sidebar filters with session_state
+│   └── rankings.py            # Styled HTML ranking tables
+│
+├── assets/
+│   └── style.css              # Global dark theme
+│
+├── data/
+│   ├── mock/
+│   │   └── generate_mock_data.py   # Demo data generator (Faker es_AR)
+│   └── raw/
+│       └── mock_data.xlsx          # ← generated locally
+│
+└── tests/
+    ├── test_mock_data.py       # Dataset validation
+    ├── test_kpis.py            # KPI engine tests
+    └── test_alerts.py          # Alert engine tests
+```
+
+**Layer separation:**
+- `src/` → Pure business logic, 100% testable and UI-independent
+- `components/` → Reusable presentation layer
+- `pages/` → Streamlit multi-page view orchestration
+
+## Technology Stack
+
+| Technology | Version | Role in System |
+|------------|---------|----------------|
+| **Python** | 3.10+ | Main runtime |
+| **Streamlit** | 1.32 | UI framework / Multi-page app |
+| **Plotly** | 5.19 | Interactive visualizations (charts, treemaps, gauges) |
+| **Pandas** | 2.2 | ETL pipeline and data analysis |
+| **NumPy** | 1.26 | Numerical and statistical calculations |
+| **openpyxl** | ≥3.1.5 | Excel file reading/writing |
+| **Faker** | 23.2 | Localized mock data generation (es_AR) |
+| **pytest** | 8.0 | Automated test suite |
+
+## Key Metrics
+
+| Indicator | Value |
+|-----------|-------|
+| 📅 Historical coverage | 27 months (Jan 2023 – Mar 2026) |
+| 👤 Monitored salespeople | 12 (profiles: star / stable / developing / problematic) |
+| 🏢 Customer portfolio | 180 (4 commercial channels) |
+| 📦 Analyzed SKUs | 60 products in 5 categories |
+| 🔁 Processed transactions | ~30,000 records |
+| 🚨 Active alert rules | 7 (ALT001–ALT007) |
+| ✅ Automated tests | 51 tests passing |
+| ⚡ Dashboard load time | < 3 seconds with full dataset |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with installation and first steps
+  </Card>
+  <Card title="System Views" icon="chart-line" href="/features/executive-summary">
+    Explore the executive summary and dashboards
+  </Card>
+  <Card title="KPI Engine" icon="gauge" href="/kpi-engine/overview">
+    Learn about the KPI calculation engine
+  </Card>
+  <Card title="Alert System" icon="bell" href="/alerts/overview">
+    Understand the intelligent alert engine
+  </Card>
+</CardGroup>

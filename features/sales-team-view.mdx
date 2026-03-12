@@ -1,0 +1,294 @@
+---
+title: 'Sales Team View'
+description: 'Consolidated management view of the complete sales team with rankings and performance analysis'
+icon: 'users'
+---
+
+## Overview
+
+The **Sales Team View** (Vista Gerencial) provides management with a comprehensive view of the entire commercial team's performance. It displays the complete seller ranking, monthly evolution trends, activity heatmaps, and zone-based analysis to identify patterns, detect underperformers, and recognize top talent.
+
+<CardGroup cols={2}>
+  <Card title="Complete Ranking" icon="ranking-star">
+    View all sellers ranked by performance with color-coded compliance indicators
+  </Card>
+  <Card title="Trend Analysis" icon="chart-line">
+    Track team evolution over time with monthly sales progression and goal comparison
+  </Card>
+  <Card title="Activity Heatmap" icon="calendar-days">
+    Visualize commercial activity patterns across the team with temporal heatmaps
+  </Card>
+  <Card title="Zone Performance" icon="map-location-dot">
+    Analyze sales distribution and market share by geographic zones
+  </Card>
+</CardGroup>
+
+## Key Metrics
+
+### Top-Level KPIs
+
+Four primary indicators summarize team performance:
+
+**Total Sales**
+- Aggregated sales across all team members
+- Comparison vs. previous period
+- Progress toward team objective
+- Compliance percentage
+
+**Average Ticket**
+- Mean transaction value across the team
+- Indicator of sales quality and upselling effectiveness
+
+**Sellers in Green**
+- Count of sellers exceeding performance thresholds
+- Percentage of team meeting or exceeding goals
+- Quick health indicator of team status
+
+**Total Transactions**
+- Number of completed sales operations
+- Activity volume metric
+
+<Info>
+All metrics automatically filter based on your sidebar selections (date range, zones, channels, or specific sellers).
+</Info>
+
+## Implementation Details
+
+The Sales Team View is implemented in `visor_kpi/pages/1_gerencia.py`.
+
+### Page Configuration and Setup
+
+```python
+import os, sys
+import streamlit as st
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
+# Load global CSS styling
+css_path = os.path.join(BASE_DIR, "assets", "style.css")
+if os.path.exists(css_path):
+    with open(css_path) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+```
+
+### Data Loading and KPI Calculation
+
+```python
+filtros = render_sidebar_filters()
+fecha_desde    = filtros["fecha_desde"]
+fecha_hasta    = filtros["fecha_hasta"]
+vendedores_sel = filtros["vendedores_sel"] or None
+zonas_sel      = filtros["zonas_sel"]      or None
+canales_sel    = filtros["canales_sel"]    or None
+
+with st.spinner("Cargando vista gerencial..."):
+    data     = load_data()
+    df       = get_filtered_data(fecha_desde, fecha_hasta, 
+                                 vendedores_sel, zonas_sel, canales_sel)
+    df_ant   = get_filtered_data_periodo_anterior(fecha_desde, fecha_hasta, 
+                                                   vendedores_sel, zonas_sel, canales_sel)
+    obj_df   = data["objetivos"]
+
+kv    = kpi_ventas_periodo(df, df_ant, obj_df, fecha_desde, fecha_hasta)
+kv_df = kpi_por_vendedor(df, obj_df, df_ant, fecha_desde, fecha_hasta)
+evo   = kpi_evolucion_mensual(df, obj_df)
+```
+
+### Rendering KPI Cards
+
+The top metrics are displayed using reusable KPI card components:
+
+```python
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    render_kpi_card("Ventas totales", fmt_moneda(kv["importe_total"]),
+                    delta_pct=kv.get("importe_vs_anterior"),
+                    objetivo=fmt_moneda(kv.get("objetivo_total",0)),
+                    cumplimiento=kv.get("cumplimiento_pct"), icon="💰")
+with c2:
+    render_kpi_card("Ticket Promedio", fmt_moneda(kv["ticket_promedio"]),
+                    icon="🎫")
+with c3:
+    n_verde = len(kv_df[kv_df["label_semaforo"]=="success"]) if not kv_df.empty else 0
+    render_kpi_card("Vendedores en verde", str(n_verde),
+                    cumplimiento=n_verde/12 if n_verde else 0, icon="🟢")
+with c4:
+    render_kpi_card("Transacciones", fmt_moneda(kv["transacciones_count"]).replace("$",""),
+                    icon="📋")
+```
+
+## Visualizations
+
+### Monthly Evolution Chart
+
+Tracks team sales progression over time with objective comparison:
+
+```python
+fig = chart_evolucion_ventas(evo, mostrar_objetivo=True, 
+                             title="Evolución mensual del equipo")
+st.plotly_chart(fig, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+**Features:**
+- Line chart showing monthly sales trends
+- Overlay of monthly objectives
+- Interactive hover for detailed values
+- Color-coded by performance level
+
+### Seller Compliance Bar Chart
+
+Visual comparison of individual seller performance:
+
+```python
+if not kv_df.empty:
+    fig_bar = chart_barras_vendedores(kv_df, title="Cumplimiento por Vendedor")
+    st.plotly_chart(fig_bar, use_container_width=True, 
+                    config={"displayModeBar": False})
+```
+
+**Shows:**
+- Horizontal bars for each seller
+- Color-coded by compliance level (green/yellow/red)
+- Percentage labels on bars
+- Sorted by performance
+
+<Note>
+The bar chart automatically sorts sellers by compliance percentage, making it easy to identify both top performers and those who need support.
+</Note>
+
+### Complete Seller Ranking
+
+Detailed table with comprehensive seller metrics:
+
+```python
+st.markdown(
+    f"<div class='section-title' style='margin-top:16px'>"
+    f"📋 Ranking Completo de Vendedores</div>",
+    unsafe_allow_html=True,
+)
+render_ranking_vendedores(kv_df)
+```
+
+**Includes:**
+- Current ranking position
+- Seller name and zone
+- Total sales amount
+- Compliance percentage
+- Variation vs. previous period
+- Performance indicator (success/warning/danger)
+
+### Activity Heatmap
+
+Visualizes temporal patterns of commercial activity:
+
+```python
+fig_heat = chart_heatmap_ventas(df, title="Actividad comercial del equipo")
+st.plotly_chart(fig_heat, use_container_width=True, 
+                config={"displayModeBar": False})
+```
+
+**Purpose:**
+- Identify high and low activity periods
+- Detect seasonal patterns
+- Spot coverage gaps
+- Optimize resource allocation
+
+## Zone Analysis
+
+Breakdown of sales performance by geographic zones:
+
+```python
+if "zona_vendedor" in df.columns:
+    zona_df = df.groupby("zona_vendedor")["importe_neto"].sum().reset_index()
+    zona_df.columns = ["Zona", "Ventas"]
+    zona_df["Ventas_fmt"] = zona_df["Ventas"].apply(fmt_moneda)
+    zona_df["Part. %"] = (zona_df["Ventas"] / zona_df["Ventas"].sum() * 100).round(1).astype(str) + "%"
+    st.dataframe(zona_df[["Zona", "Ventas_fmt", "Part. %"]], 
+                 use_container_width=True, hide_index=True)
+```
+
+**Displays:**
+- Zone name
+- Total sales per zone
+- Percentage share of total sales
+- Formatted currency values
+
+<Info>
+Zone analysis helps identify geographic opportunities and potential market expansion areas.
+</Info>
+
+## Seller Performance Profiles
+
+The system automatically classifies sellers into profiles based on performance history:
+
+- **Estrella (Star)**: Consistently exceeds goals, top performer
+- **Estable (Stable)**: Meets goals reliably, consistent performer
+- **Desarrollo (Development)**: Shows potential, needs coaching
+- **Problemático (Problematic)**: Below threshold, requires intervention
+
+These profiles are calculated in the data generation layer and used throughout the application for contextual insights.
+
+## Usage Scenarios
+
+<AccordionGroup>
+  <Accordion title="Weekly team review">
+    1. Check overall team compliance percentage
+    2. Review the evolution chart for trends
+    3. Identify sellers in red or yellow status
+    4. Drill down into specific zones with performance issues
+    5. Plan coaching sessions for underperformers
+  </Accordion>
+  
+  <Accordion title="Monthly performance assessment">
+    1. Compare current month vs. previous month using the bar chart
+    2. Review the complete ranking to recognize top performers
+    3. Analyze zone distribution to identify market opportunities
+    4. Check the activity heatmap for coverage patterns
+    5. Export data for formal review meetings
+  </Accordion>
+  
+  <Accordion title="Strategic planning">
+    1. Use historical evolution data to set realistic goals
+    2. Identify zones with growth potential
+    3. Analyze seller distribution across zones
+    4. Plan territory reassignments based on performance
+    5. Benchmark against previous periods
+  </Accordion>
+</AccordionGroup>
+
+## Filtering Options
+
+Use the sidebar to customize your view:
+
+**Date Range**: Select any period for analysis
+**Zones**: Filter by specific geographic zones
+**Channels**: Focus on particular commercial channels
+**Sellers**: Compare specific team members
+
+<Warning>
+When filtering by specific sellers, team-level metrics will reflect only the selected subset, not the entire team.
+</Warning>
+
+## Performance Indicators
+
+The system uses color-coded indicators consistently throughout:
+
+- **🟢 Green (Success)**: ≥90% compliance
+- **🟡 Yellow (Warning)**: 70-89% compliance
+- **🔴 Red (Danger)**: Less than 70% compliance
+
+These thresholds can be customized in `config.py`:
+
+```python
+config.py:112
+UMBRAL_CUMPLIMIENTO_ALTO  = 0.90  # Green threshold
+UMBRAL_CUMPLIMIENTO_BAJO  = 0.70  # Red threshold
+```
+
+## Related Pages
+
+- [Individual Seller View](/features/individual-seller-view) - Personal dashboard for each seller
+- [Executive Summary](/features/executive-summary) - High-level business overview
+- [Alerts Center](/features/alerts-center) - Team performance alerts

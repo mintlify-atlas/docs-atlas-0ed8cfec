@@ -1,0 +1,345 @@
+---
+title: 'Pareto Analysis'
+description: '80/20 analysis module for customers and products'
+---
+
+## Overview
+
+The Pareto module (`pareto.py`) implements 80/20 analysis for customers and products, calculating concentration metrics and assigning ABC categories based on cumulative sales contribution.
+
+## Import
+
+```python
+from src.pareto import calcular_pareto, get_concentracion_pareto
+```
+
+---
+
+## Main Functions
+
+### calcular_pareto
+
+Adds Pareto analysis columns to a DataFrame.
+
+```python
+def calcular_pareto(
+    df: pd.DataFrame,
+    columna_valor: str,
+    columna_id: str,
+) -> pd.DataFrame
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame with entities and their values
+</ParamField>
+
+<ParamField path="columna_valor" type="str" required>
+  Name of the column containing the metric to analyze (e.g., "importe_total", "unidades_vendidas")
+</ParamField>
+
+<ParamField path="columna_id" type="str" required>
+  Name of the ID column (e.g., "id_cliente", "id_producto")
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame with additional columns:
+  - `participacion_pct`: Percentage of total value (0-1)
+  - `acumulado_pct`: Cumulative percentage sorted descending (0-1)
+  - `categoria_pareto`: Category assignment:
+    - **A**: 0-80% cumulative (top performers)
+    - **B**: 80-95% cumulative (middle tier)
+    - **C**: 95-100% cumulative (long tail)
+  
+  DataFrame is sorted by `columna_valor` in descending order
+</ResponseField>
+
+**Example:**
+
+```python
+import pandas as pd
+from src.pareto import calcular_pareto
+
+# Customer sales analysis
+clientes = pd.DataFrame({
+    'id_cliente': ['C001', 'C002', 'C003', 'C004', 'C005'],
+    'importe_total': [50000, 30000, 15000, 3000, 2000]
+})
+
+clientes_pareto = calcular_pareto(
+    df=clientes,
+    columna_valor='importe_total',
+    columna_id='id_cliente'
+)
+
+print(clientes_pareto[['id_cliente', 'importe_total', 'participacion_pct', 
+                        'acumulado_pct', 'categoria_pareto']])
+
+# Output:
+#   id_cliente  importe_total  participacion_pct  acumulado_pct categoria_pareto
+# 0     C001          50000              0.50           0.50                A
+# 1     C002          30000              0.30           0.80                A
+# 2     C003          15000              0.15           0.95                B
+# 3     C004           3000              0.03           0.98                C
+# 4     C005           2000              0.02           1.00                C
+```
+
+**Category Logic:**
+
+```python
+def _cat(acum: float) -> str:
+    if acum <= 0.80:
+        return "A"  # Top 80% of value
+    elif acum <= 0.95:
+        return "B"  # Next 15% of value
+    return "C"      # Bottom 5% of value
+```
+
+---
+
+### get_concentracion_pareto
+
+Calculates concentration metrics from a Pareto-analyzed DataFrame.
+
+```python
+def get_concentracion_pareto(
+    df: pd.DataFrame,
+    columna_valor: str = "importe_total",
+) -> dict
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame that has already been processed with `calcular_pareto()` (must have `categoria_pareto` column)
+</ParamField>
+
+<ParamField path="columna_valor" type="str" default="importe_total">
+  Name of the value column to analyze
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  Dictionary with concentration metrics:
+  - `pct_entidades_A` (float): Percentage of entities in category A (0-1)
+  - `pct_ventas_A` (float): Percentage of total value from category A entities (0-1)
+  - `n_entidades_A` (int): Count of category A entities
+  - `indice_gini` (float): Gini coefficient (0 = perfect equality, 1 = total concentration)
+</ResponseField>
+
+**Example:**
+
+```python
+from src.pareto import calcular_pareto, get_concentracion_pareto
+
+# Analyze product concentration
+productos_pareto = calcular_pareto(
+    df=productos_df,
+    columna_valor='importe_total',
+    columna_id='id_producto'
+)
+
+concentracion = get_concentracion_pareto(
+    df=productos_pareto,
+    columna_valor='importe_total'
+)
+
+print(f"Category A products: {concentracion['n_entidades_A']} "
+      f"({concentracion['pct_entidades_A']*100:.1f}% of total)")
+print(f"Category A sales: {concentracion['pct_ventas_A']*100:.1f}% of total")
+print(f"Gini index: {concentracion['indice_gini']:.3f}")
+
+# Output:
+# Category A products: 15 (12.5% of total)
+# Category A sales: 82.3% of total
+# Gini index: 0.687
+```
+
+---
+
+## Gini Coefficient
+
+The module includes a private function to calculate the Gini coefficient:
+
+```python
+def _calcular_gini(valores: np.ndarray) -> float
+```
+
+**Interpretation:**
+- **0.0**: Perfect equality (all entities contribute equally)
+- **0.3-0.5**: Moderate concentration
+- **0.5-0.7**: High concentration
+- **0.7-1.0**: Very high concentration
+- **1.0**: Total concentration (one entity has everything)
+
+**Formula:**
+
+```
+Gini = (2 * Σ(i × valores[i]) / (n × total)) - (n + 1) / n
+```
+
+Where valores are sorted in ascending order.
+
+---
+
+## Complete Workflow Example
+
+```python
+import pandas as pd
+from src.data_loader import get_filtered_data
+from src.pareto import calcular_pareto, get_concentracion_pareto
+from datetime import date
+
+# Load and filter data
+ventas = get_filtered_data(
+    fecha_desde=date(2026, 3, 1),
+    fecha_hasta=date(2026, 3, 31)
+)
+
+# Aggregate by customer
+clientes_ventas = ventas.groupby('id_cliente').agg({
+    'importe_neto': 'sum',
+    'id_venta': 'count',
+    'razon_social': 'first'
+}).reset_index()
+
+clientes_ventas = clientes_ventas.rename(columns={
+    'importe_neto': 'importe_total',
+    'id_venta': 'n_transacciones'
+})
+
+# Calculate Pareto
+clientes_pareto = calcular_pareto(
+    df=clientes_ventas,
+    columna_valor='importe_total',
+    columna_id='id_cliente'
+)
+
+# Get concentration metrics
+concentracion = get_concentracion_pareto(clientes_pareto, 'importe_total')
+
+# Display results
+print("\n📊 CUSTOMER CONCENTRATION ANALYSIS")
+print("="*50)
+print(f"Category A: {concentracion['n_entidades_A']} customers "
+      f"({concentracion['pct_entidades_A']*100:.1f}%)")
+print(f"Category A Revenue: {concentracion['pct_ventas_A']*100:.1f}% of total")
+print(f"Concentration (Gini): {concentracion['indice_gini']:.3f}")
+
+print("\n🔝 TOP 10 CUSTOMERS (Category A)")
+print("="*50)
+top_10 = clientes_pareto.head(10)
+for _, row in top_10.iterrows():
+    print(f"{row['razon_social']:<30s} ${row['importe_total']:>12,.0f} "
+          f"({row['participacion_pct']*100:>5.2f}%)  [{row['categoria_pareto']}]")
+
+# Export category A customers
+categoria_a = clientes_pareto[clientes_pareto['categoria_pareto'] == 'A']
+categoria_a.to_excel('clientes_categoria_A.xlsx', index=False)
+print(f"\n✓ Exported {len(categoria_a)} Category A customers")
+```
+
+---
+
+## Visualization Examples
+
+### Pareto Chart
+
+```python
+import plotly.graph_objects as go
+
+fig = go.Figure()
+
+# Bar chart for individual values
+fig.add_trace(go.Bar(
+    x=clientes_pareto['razon_social'][:20],
+    y=clientes_pareto['importe_total'][:20],
+    name='Sales',
+    marker_color='lightblue'
+))
+
+# Line chart for cumulative percentage
+fig.add_trace(go.Scatter(
+    x=clientes_pareto['razon_social'][:20],
+    y=clientes_pareto['acumulado_pct'][:20] * 100,
+    name='Cumulative %',
+    yaxis='y2',
+    mode='lines+markers',
+    marker=dict(color='red', size=8),
+    line=dict(width=2)
+))
+
+# Add 80% reference line
+fig.add_hline(y=80, line_dash="dash", line_color="red", yaxis='y2',
+              annotation_text="80%")
+
+fig.update_layout(
+    title='Customer Pareto Analysis',
+    xaxis_title='Customer',
+    yaxis_title='Sales ($)',
+    yaxis2=dict(title='Cumulative %', overlaying='y', side='right', range=[0, 100]),
+    hovermode='x unified'
+)
+
+fig.show()
+```
+
+### Category Distribution
+
+```python
+import plotly.express as px
+
+category_summary = clientes_pareto.groupby('categoria_pareto').agg({
+    'id_cliente': 'count',
+    'importe_total': 'sum'
+}).reset_index()
+
+fig = px.pie(
+    category_summary,
+    values='importe_total',
+    names='categoria_pareto',
+    title='Sales by Pareto Category',
+    color='categoria_pareto',
+    color_discrete_map={'A': '#00C49F', 'B': '#FFB347', 'C': '#E84855'}
+)
+
+fig.show()
+```
+
+---
+
+## Integration with KPI Engine
+
+The Pareto module is automatically integrated into KPI calculations:
+
+```python
+from src.kpi_engine import kpi_clientes, kpi_productos
+
+# Customer KPIs include Pareto categories
+clientes_kpi = kpi_clientes(
+    df=ventas_actuales,
+    clientes_df=clientes_master,
+    df_anterior=ventas_mes_anterior
+)
+
+# Columns include: categoria_pareto, participacion_pct, acumulado_pct
+print(clientes_kpi[['razon_social', 'importe_total', 'categoria_pareto']].head())
+
+# Product KPIs also include Pareto
+productos_kpi = kpi_productos(
+    df=ventas_actuales,
+    df_anterior=ventas_mes_anterior
+)
+
+print(productos_kpi[['descripcion', 'importe_total', 'categoria_pareto']].head())
+```
+
+---
+
+## Notes
+
+- Empty DataFrames are handled gracefully (returns default columns with category "C")
+- Zero total values return category "C" for all entities
+- The DataFrame is **sorted descending** by value after Pareto calculation
+- Pareto categories are assigned based on cumulative percentage:
+  - **A**: Entities that cumulatively reach 80% of total value
+  - **B**: Next entities from 80% to 95%
+  - **C**: Remaining entities from 95% to 100%
+- The Gini coefficient provides an additional concentration metric independent of the 80/20 rule
+- All percentage values are returned as floats (0-1), not 0-100

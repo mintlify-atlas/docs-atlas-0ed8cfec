@@ -1,0 +1,411 @@
+---
+title: 'Data Loader'
+description: 'Excel data loading, parsing, and filtering with caching'
+---
+
+## Overview
+
+The Data Loader (`data_loader.py`) handles reading, parsing, and filtering the Excel mock data file. All functions use `@st.cache_data` for optimal performance in Streamlit applications.
+
+## Import
+
+```python
+from src.data_loader import (
+    load_data,
+    get_master_df,
+    get_filtered_data,
+    get_filtered_data_periodo_anterior,
+    get_lista_vendedores,
+    get_lista_zonas,
+    get_lista_canales,
+    check_data_available
+)
+```
+
+---
+
+## Core Loading Functions
+
+### load_data
+
+Reads the Excel file and returns parsed DataFrames.
+
+```python
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_data() -> dict[str, pd.DataFrame]
+```
+
+<ResponseField name="return" type="dict[str, pd.DataFrame]">
+  Dictionary with keys:
+  - `ventas`: Sales transactions with parsed dates and numeric columns
+  - `vendedores`: Salespeople master data
+  - `clientes`: Customers master data
+  - `productos`: Products catalog
+  - `objetivos`: Sales goals by salesperson and period
+</ResponseField>
+
+**Excel Sheets Parsed:**
+- **Ventas**: `fecha` → datetime, `importe_neto/bruto/cantidad/precio_unitario/descuento_pct` → numeric
+- **Vendedores**: `objetivo_mensual_base/antiguedad_años` → numeric, `activo` → boolean
+- **Clientes**: `fecha_alta` → datetime, `activo` → boolean
+- **Productos**: `precio_unitario/costo_unitario` → numeric, `activo` → boolean
+- **Objetivos**: `objetivo` → numeric, `periodo` → datetime
+
+**Example:**
+
+```python
+from src.data_loader import load_data
+
+data = load_data()
+
+print(f"Total sales records: {len(data['ventas'])}")
+print(f"Active salespeople: {len(data['vendedores'][data['vendedores']['activo']])}")
+print(f"Products: {len(data['productos'])}")
+```
+
+**Raises:**
+- `FileNotFoundError` if the data file doesn't exist
+
+---
+
+### get_master_df
+
+Returns a master DataFrame with all joins applied (sales + salespeople + customers + products).
+
+```python
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_master_df() -> pd.DataFrame
+```
+
+<ResponseField name="return" type="pd.DataFrame">
+  Complete DataFrame with all relationships joined, including:
+  - All original sales columns
+  - `nombre_vendedor`, `zona_vendedor`, `perfil` (from vendedores)
+  - `razon_social`, `canal`, `zona_cliente` (from clientes)
+  - `descripcion`, `categoria`, `precio_catalogo`, `costo_catalogo` (from productos)
+  - `margen_neto`: Calculated net margin per transaction
+  - `margen_pct`: Margin percentage (0-1)
+</ResponseField>
+
+**Calculated Fields:**
+- `margen_neto = importe_neto - (costo_catalogo / precio_catalogo * importe_neto)`
+- `margen_pct = margen_neto / importe_neto` (clipped to 0-1)
+
+**Example:**
+
+```python
+master = get_master_df()
+
+# Analyze by salesperson
+by_vendedor = master.groupby('nombre_vendedor').agg({
+    'importe_neto': 'sum',
+    'margen_neto': 'sum',
+    'id_cliente': 'nunique'
+})
+
+print(by_vendedor.head())
+```
+
+---
+
+## Filtering Functions
+
+### get_filtered_data
+
+Returns the master DataFrame filtered by date range and optional dimensions.
+
+```python
+def get_filtered_data(
+    fecha_desde: date,
+    fecha_hasta: date,
+    vendedores: list[str] | None = None,
+    zonas: list[str] | None      = None,
+    canales: list[str] | None    = None,
+) -> pd.DataFrame
+```
+
+<ParamField path="fecha_desde" type="date" required>
+  Start date (inclusive)
+</ParamField>
+
+<ParamField path="fecha_hasta" type="date" required>
+  End date (inclusive)
+</ParamField>
+
+<ParamField path="vendedores" type="list[str] | None" default="None">
+  List of salesperson IDs to filter (None = all)
+</ParamField>
+
+<ParamField path="zonas" type="list[str] | None" default="None">
+  List of territory zones to filter (None = all)
+</ParamField>
+
+<ParamField path="canales" type="list[str] | None" default="None">
+  List of sales channels to filter (None = all)
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  Filtered master DataFrame matching all provided criteria
+</ResponseField>
+
+**Example:**
+
+```python
+from datetime import date
+from src.data_loader import get_filtered_data
+
+# Last month's sales for specific salespeople
+ventas_filtradas = get_filtered_data(
+    fecha_desde=date(2026, 2, 1),
+    fecha_hasta=date(2026, 2, 28),
+    vendedores=['V001', 'V002', 'V003'],
+    zonas=['Norte', 'Centro']
+)
+
+print(f"Filtered records: {len(ventas_filtradas)}")
+print(f"Total sales: ${ventas_filtradas['importe_neto'].sum():,.2f}")
+```
+
+---
+
+### get_filtered_data_periodo_anterior
+
+Returns data from the equivalent previous period (same duration).
+
+```python
+def get_filtered_data_periodo_anterior(
+    fecha_desde: date,
+    fecha_hasta: date,
+    vendedores: list[str] | None = None,
+    zonas: list[str] | None      = None,
+    canales: list[str] | None    = None,
+) -> pd.DataFrame
+```
+
+<ParamField path="fecha_desde" type="date" required>
+  Start date of current period
+</ParamField>
+
+<ParamField path="fecha_hasta" type="date" required>
+  End date of current period
+</ParamField>
+
+<ParamField path="vendedores" type="list[str] | None" default="None">
+  Salesperson filter (applied to previous period)
+</ParamField>
+
+<ParamField path="zonas" type="list[str] | None" default="None">
+  Zone filter
+</ParamField>
+
+<ParamField path="canales" type="list[str] | None" default="None">
+  Channel filter
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  Filtered data from the previous equivalent period
+</ResponseField>
+
+**Example:**
+
+```python
+# Compare March 2026 vs February 2026
+marzo = get_filtered_data(
+    fecha_desde=date(2026, 3, 1),
+    fecha_hasta=date(2026, 3, 31)
+)
+
+febrero = get_filtered_data_periodo_anterior(
+    fecha_desde=date(2026, 3, 1),
+    fecha_hasta=date(2026, 3, 31)
+)
+
+print(f"March: ${marzo['importe_neto'].sum():,.2f}")
+print(f"February: ${febrero['importe_neto'].sum():,.2f}")
+print(f"Growth: {(marzo['importe_neto'].sum()/febrero['importe_neto'].sum()-1)*100:.1f}%")
+```
+
+---
+
+## Helper Functions
+
+### get_lista_vendedores
+
+Returns list of active salespeople for filter dropdowns.
+
+```python
+def get_lista_vendedores() -> list[dict]
+```
+
+<ResponseField name="return" type="list[dict]">
+  List of dictionaries with keys:
+  - `id_vendedor`: Salesperson ID
+  - `nombre_completo`: Full name
+  - `zona`: Territory
+</ResponseField>
+
+**Example:**
+
+```python
+vendedores = get_lista_vendedores()
+
+# Create Streamlit selectbox
+import streamlit as st
+selected = st.multiselect(
+    "Select Salespeople",
+    options=[v['id_vendedor'] for v in vendedores],
+    format_func=lambda x: next(v['nombre_completo'] for v in vendedores if v['id_vendedor']==x)
+)
+```
+
+---
+
+### get_lista_zonas
+
+Returns sorted list of unique territory zones.
+
+```python
+def get_lista_zonas() -> list[str]
+```
+
+<ResponseField name="return" type="list[str]">
+  Sorted list of zone names
+</ResponseField>
+
+**Example:**
+
+```python
+zonas = get_lista_zonas()
+print(f"Territories: {', '.join(zonas)}")
+```
+
+---
+
+### get_lista_canales
+
+Returns sorted list of unique sales channels.
+
+```python
+def get_lista_canales() -> list[str]
+```
+
+<ResponseField name="return" type="list[str]">
+  Sorted list of channel names
+</ResponseField>
+
+**Example:**
+
+```python
+canales = get_lista_canales()
+print(f"Channels: {', '.join(canales)}")
+```
+
+---
+
+### check_data_available
+
+Verifies if the data file exists.
+
+```python
+def check_data_available() -> bool
+```
+
+<ResponseField name="return" type="bool">
+  True if data file exists, False otherwise
+</ResponseField>
+
+**Example:**
+
+```python
+import streamlit as st
+from src.data_loader import check_data_available
+
+if not check_data_available():
+    st.error("Data file not found. Please run: python data/mock/generate_mock_data.py")
+    st.stop()
+
+# Continue with normal flow
+data = load_data()
+```
+
+---
+
+## Configuration
+
+The data loader uses configuration from `config.py`:
+
+```python
+from config import DATA_PATH  # Path to Excel file
+```
+
+**Default Path:** `data/mock/visor_kpi_data.xlsx`
+
+---
+
+## Caching
+
+All main functions use Streamlit's `@st.cache_data` decorator:
+
+- **TTL:** 3600 seconds (1 hour)
+- **show_spinner:** False (for better UX)
+- **Benefits:** 
+  - Excel file is only read once per session
+  - Master DataFrame joins are computed once
+  - Dramatically improves dashboard performance
+
+**Manual Cache Clearing:**
+
+```python
+import streamlit as st
+
+# Clear all cached data
+st.cache_data.clear()
+
+# Then reload
+data = load_data()
+```
+
+---
+
+## Data Schema
+
+### Ventas (Sales)
+
+Key columns:
+- `id_venta`, `fecha`, `id_cliente`, `id_vendedor`, `id_producto`
+- `cantidad`, `precio_unitario`, `importe_bruto`, `importe_neto`, `descuento_pct`
+- `año`, `mes`, `periodo` (added by loader)
+
+### Vendedores (Salespeople)
+
+Key columns:
+- `id_vendedor`, `nombre_completo`, `zona`, `perfil`, `activo`
+- `objetivo_mensual_base`, `antiguedad_años`
+
+### Clientes (Customers)
+
+Key columns:
+- `id_cliente`, `razon_social`, `canal`, `zona`, `activo`
+- `id_vendedor_asignado`, `fecha_alta`
+
+### Productos (Products)
+
+Key columns:
+- `id_producto`, `descripcion`, `categoria`, `activo`
+- `precio_unitario`, `costo_unitario`
+
+### Objetivos (Goals)
+
+Key columns:
+- `id_vendedor`, `periodo`, `objetivo`
+
+---
+
+## Notes
+
+- All date fields are parsed to pandas Timestamp objects
+- Boolean fields are explicitly cast with `.astype(bool)`
+- Numeric columns use `pd.to_numeric()` with `errors='coerce'` (invalid → NaN)
+- Missing numeric values are filled with 0
+- The master DataFrame always includes margin calculations
+- All filtering preserves the full master schema

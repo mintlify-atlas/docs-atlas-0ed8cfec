@@ -1,0 +1,463 @@
+---
+title: Ranking Components
+description: HTML-styled ranking tables for vendors, customers, and products with medals, progress bars, and category badges
+---
+
+The `rankings` module provides styled ranking tables using HTML/CSS for complete layout control. All tables include responsive design, color-coded indicators, and rich formatting.
+
+## Overview
+
+Ranking components render as HTML tables with:
+- Medal icons for top performers (🥇🥈🥉)
+- Progress bars with traffic light colors
+- Category badges (Pareto A/B/C)
+- Delta indicators for ranking changes
+- Channel and status tags
+- Responsive overflow handling
+
+## Functions
+
+### render_ranking_vendedores
+
+```python
+render_ranking_vendedores(
+    df_vendedores: pd.DataFrame,
+    max_rows: int = 12,
+) -> None
+```
+
+Renders a ranked table of vendors with performance metrics, medals for top 3, and ranking change indicators.
+
+<ParamField path="df_vendedores" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `ranking_actual`: Current position (int)
+  - `nombre_vendedor` or `id_vendedor`: Vendor name
+  - `zona_vendedor`: Zone name
+  - `importe_total`: Total sales amount
+  - `cumplimiento_pct`: Achievement rate as decimal (e.g., 0.95)
+  - `delta_ranking`: Position change from previous period (int, positive = improved)
+  - `color_semaforo`: Traffic light color for progress bar
+</ParamField>
+
+<ParamField path="max_rows" type="int" default="12">
+  Maximum number of rows to display
+</ParamField>
+
+#### Table Columns
+
+| Column | Content | Styling |
+|--------|---------|--------|
+| **#** | Position with medals for top 3 | Centered, 50px width |
+| **Vendedor** | Name (bold) + Zone (small gray) | Left-aligned, primary text |
+| **Cumplimiento** | Percentage + progress bar | Right-aligned, color-coded |
+| **Ventas** | Formatted currency | Right-aligned, tabular nums |
+| **Ranking** | Delta with arrows | Centered, color-coded |
+
+#### Position Display
+
+- **1st place**: 🥇 (gold medal)
+- **2nd place**: 🥈 (silver medal)
+- **3rd place**: 🥉 (bronze medal)
+- **4th+**: #4, #5, etc. (gray text)
+
+#### Ranking Delta
+
+- **Improved**: ↑N (green) - moved up N positions
+- **Declined**: ↓N (red) - moved down N positions  
+- **Unchanged**: — (gray) - same position
+
+#### Example Usage
+
+```python
+from components.rankings import render_ranking_vendedores
+
+# app.py:213
+render_ranking_vendedores(kv_df.head(5))
+```
+
+```python
+# pages/1_gerencia.py:97 - Full ranking
+render_ranking_vendedores(kv_df)
+```
+
+```python
+# pages/2_vendedores.py:171 - Team ranking with custom limit
+render_ranking_vendedores(kv_all, max_rows=12)
+```
+
+---
+
+### render_ranking_clientes
+
+```python
+render_ranking_clientes(
+    df_clientes: pd.DataFrame,
+    top_n: int = 20,
+) -> None
+```
+
+Renders a customer ranking table with channel badges, Pareto categories, and days since last purchase.
+
+<ParamField path="df_clientes" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `razon_social` or `id_cliente`: Customer name
+  - `canal`: Sales channel
+  - `importe_total`: Total sales amount
+  - `categoria_pareto`: A/B/C category
+  - `participacion_pct`: Participation percentage as decimal
+  - `dias_desde_ultima_compra`: Days since last purchase
+</ParamField>
+
+<ParamField path="top_n" type="int" default="20">
+  Number of top customers to display
+</ParamField>
+
+#### Table Columns
+
+| Column | Content | Styling |
+|--------|---------|--------|
+| **Cliente** | Name (bold) + Channel badge | Left-aligned |
+| **Cat.** | Pareto category badge | Centered, color-coded |
+| **Ventas** | Formatted currency | Right-aligned |
+| **Part.%** | Participation percentage | Right-aligned, gray |
+| **Sin compra** | Days since last purchase | Centered, red if >30 |
+
+#### Channel Badges
+
+Channel badges use color-coded styling:
+
+- **Canal Tradicional**: Primary blue
+- **Supermercadismo**: Success green
+- **Mayorista**: Warning orange
+- **HoReCa**: Purple (#9B59B6)
+
+Format: Rounded pill with semi-transparent background, 10px font.
+
+#### Pareto Category Badges
+
+- **Category A**: Green background, white text
+- **Category B**: Orange background, white text
+- **Category C**: Gray background, white text
+
+Format: Rounded rectangle, 2px padding, 10px font, bold.
+
+#### Days Without Purchase
+
+- **>30 days**: Red text (danger)
+- **≤30 days**: Gray text (normal)
+- Format: "Nd" (e.g., "45d")
+
+#### Example Usage
+
+```python
+from components.rankings import render_ranking_clientes
+
+# app.py:223
+render_ranking_clientes(kcli.head(5))
+```
+
+```python
+# pages/2_vendedores.py:183 - Vendor's customers
+render_ranking_clientes(kcli, top_n=15)
+```
+
+```python
+# pages/3_clientes.py:147 - Full customer table
+render_ranking_clientes(df_cli_filtrado, top_n=50)
+```
+
+```python
+# pages/3_clientes.py:164 - At-risk customers only
+en_riesgo = kcli[kcli["flag_en_riesgo"] == True]
+render_ranking_clientes(en_riesgo, top_n=10)
+```
+
+---
+
+### render_ranking_productos
+
+```python
+render_ranking_productos(
+    df_productos: pd.DataFrame,
+    top_n: int = 20,
+) -> None
+```
+
+Renders a product ranking table with categories, Pareto classification, and period-over-period variation.
+
+<ParamField path="df_productos" type="pd.DataFrame" required>
+  DataFrame with columns:
+  - `descripcion` or `id_producto`: Product name
+  - `categoria`: Product category
+  - `importe_total`: Total sales amount
+  - `participacion_pct`: Participation percentage as decimal
+  - `acumulado_pct`: Cumulative percentage (optional)
+  - `categoria_pareto`: A/B/C Pareto category
+  - `vs_periodo_anterior`: Growth rate as decimal (optional)
+</ParamField>
+
+<ParamField path="top_n" type="int" default="20">
+  Number of top products to display
+</ParamField>
+
+#### Table Columns
+
+| Column | Content | Styling |
+|--------|---------|--------|
+| **Producto** | Description (bold) + Category (small gray) | Left-aligned |
+| **Cat.** | Pareto category badge | Centered, color-coded |
+| **Ventas** | Formatted currency | Right-aligned |
+| **Part.%** | Participation percentage | Right-aligned, gray |
+| **vs Anterior** | Period variation with arrow | Right-aligned, color-coded |
+
+#### Variation Display
+
+- **Positive growth**: ▲ +X% (green)
+- **Negative growth**: ▼ -X% (red)
+- **No data**: — (gray)
+
+#### Example Usage
+
+```python
+from components.rankings import render_ranking_productos
+
+# app.py:233
+render_ranking_productos(kp_df.head(5))
+```
+
+```python
+# pages/2_vendedores.py:190 - Vendor's top products
+render_ranking_productos(kp, top_n=10)
+```
+
+---
+
+### render_posicion_ranking
+
+```python
+render_posicion_ranking(
+    ranking_actual: int,
+    ranking_anterior: int,
+    total_vendedores: int,
+) -> None
+```
+
+Renders a visual card showing a vendor's current position in the team ranking with context.
+
+<ParamField path="ranking_actual" type="int" required>
+  Current ranking position (1-based, 1 = best)
+</ParamField>
+
+<ParamField path="ranking_anterior" type="int" required>
+  Previous period ranking position
+</ParamField>
+
+<ParamField path="total_vendedores" type="int" required>
+  Total number of vendors in the ranking
+</ParamField>
+
+#### Display Elements
+
+**Main Position**
+- Large display (48px font, 800 weight)
+- Primary blue color
+- Format: #N
+
+**Adjacent Positions**
+- Shows #(N-1) and #(N+1) in smaller gray text
+- Helps vendor see nearby competitors
+- Shows "—" at boundaries (top/bottom)
+
+**Context Info**
+- "de X vendedores" below main position
+- Shows total pool size
+
+**Delta Message**
+- "↑ Subiste N posición(es)" (green) - improved
+- "↓ Bajaste N posición(es)" (red) - declined
+- "— Sin cambios" (gray) - unchanged
+- "vs mes anterior" suffix
+
+#### Card Styling
+
+- Card background with border
+- Rounded corners (8px)
+- Centered layout
+- Flexbox for position display
+- 16px gap between elements
+
+#### Example Usage
+
+```python
+from components.rankings import render_posicion_ranking
+
+# pages/2_vendedores.py:156-162
+if not kv_all.empty:
+    fila = kv_all[kv_all["id_vendedor"] == vendedor_id]
+    if not fila.empty:
+        rank_act = int(fila.iloc[0].get("ranking_actual", 1))
+        rank_ant = int(fila.iloc[0].get("ranking_anterior", rank_act))
+        render_posicion_ranking(rank_act, rank_ant, len(kv_all))
+```
+
+---
+
+## Styling Details
+
+### Table Structure
+
+All ranking tables use:
+
+```html
+<table style='width:100%;border-collapse:collapse'>
+  <thead>
+    <tr>
+      <th style='padding:6px 8px;color:...;border-bottom:2px solid...'>
+        Header
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style='border-bottom:1px solid...'>
+      <td style='padding:8px 4px'>Content</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+### Color Scheme
+
+From `config.COLORS`:
+
+- **Primary**: `text_primary` - Main text (names, values)
+- **Secondary**: `text_secondary` - Supporting text (zones, categories)
+- **Success**: `success` - Positive indicators (green)
+- **Warning**: `warning` - Warning indicators (orange)
+- **Danger**: `danger` - Negative indicators (red)
+- **Border**: `border` - Table borders and dividers
+- **Background**: `bg_card` - Card backgrounds
+
+### Typography
+
+- **Headers**: 11px, 600 weight, uppercase, letter-spacing: 1px
+- **Primary text**: 13px, 600 weight
+- **Secondary text**: 11px, normal weight
+- **Numbers**: Tabular numerals for alignment
+
+### Responsive Design
+
+All tables wrapped in:
+
+```html
+<div style='overflow-x:auto'>
+  <table>...</table>
+</div>
+```
+
+This ensures horizontal scrolling on small screens instead of breaking layout.
+
+## Empty State Handling
+
+All functions check for empty DataFrames and display info messages:
+
+```python
+if df_vendedores.empty:
+    st.info("Sin datos de vendedores para el período seleccionado.")
+    return
+```
+
+## Data Requirements
+
+### Required Columns
+
+Each function has minimum column requirements. Missing columns cause:
+- Fallback to alternative columns (e.g., `id_vendedor` if `nombre_vendedor` missing)
+- Default values (e.g., `"—"` for missing data)
+- Graceful degradation (features disabled but table still renders)
+
+### Optional Columns
+
+Optional columns enhance display:
+- `color_semaforo` - Uses default colors if missing
+- `vs_periodo_anterior` - Shows "—" if missing
+- `categoria_pareto` - Uses "C" default if missing
+
+## Dependencies
+
+```python
+import streamlit as st
+import pandas as pd
+from config import (
+    COLORS,
+    fmt_moneda,
+    fmt_pct,
+    fmt_numero,
+    get_color_semaforo
+)
+```
+
+## Related
+
+- [KPI Cards](/api/components/kpi-card) - Metric display components
+- [Charts](/api/components/charts) - Visual analytics
+- [KPI Engine](/api/kpi-engine) - Functions that generate ranking DataFrames
+- [Configuration](/development/architecture) - Formatting utilities
+
+## Best Practices
+
+### Limit Rows for Performance
+
+Use `top_n` or `max_rows` to limit display:
+
+```python
+# ✅ Good - manageable size
+render_ranking_vendedores(df, max_rows=12)
+
+# ❌ Avoid - too many rows
+render_ranking_vendedores(df)  # Could be 100+ rows
+```
+
+### Sort Before Rendering
+
+Ranking functions don't sort - ensure data is pre-sorted:
+
+```python
+# ✅ Correct - sorted by achievement
+df_sorted = df.sort_values("cumplimiento_pct", ascending=False)
+render_ranking_vendedores(df_sorted)
+```
+
+### Use .head() for Top N
+
+Pre-filter DataFrames before passing:
+
+```python
+# ✅ Efficient
+render_ranking_clientes(kcli.head(20))
+
+# ❌ Less efficient - function limits internally
+render_ranking_clientes(kcli, top_n=20)
+```
+
+### Check for Required Columns
+
+Verify critical columns exist before calling:
+
+```python
+if "cumplimiento_pct" in df.columns:
+    render_ranking_vendedores(df)
+else:
+    st.warning("Datos incompletos")
+```
+
+### Combine with Section Headers
+
+Use styled headers above rankings:
+
+```python
+st.markdown(
+    f"<div class='section-title'>🏆 Top Vendedores</div>",
+    unsafe_allow_html=True,
+)
+render_ranking_vendedores(kv_df.head(5))
+```

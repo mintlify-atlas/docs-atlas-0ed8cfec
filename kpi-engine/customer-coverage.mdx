@@ -1,0 +1,370 @@
+---
+title: 'Customer Coverage'
+description: 'Track customer portfolio health, coverage rates, churn, and acquisition metrics'
+icon: 'users'
+---
+
+## Overview
+
+The `kpi_cobertura_clientes()` function analyzes customer portfolio health by calculating coverage rates, identifying churned customers, tracking new acquisitions, and monitoring reactivations.
+
+<Note>
+  Coverage metrics answer the critical question: **"Are we actively serving our customer base, or are we leaving money on the table?"**
+</Note>
+
+## Why It Matters
+
+Customer coverage is a leading indicator of sales health:
+
+- **Low coverage** signals underutilized territory potential or execution problems
+- **Churned customers** represent revenue at risk that requires immediate action
+- **New customer acquisition** measures market expansion effectiveness
+- **Reactivations** show success in winning back dormant accounts
+
+Unlike lagging indicators (revenue, margin), coverage metrics provide **early warning signals** before problems impact the bottom line.
+
+## Function Signature
+
+```python kpi_engine.py
+def kpi_cobertura_clientes(
+    df: pd.DataFrame,
+    clientes_df: pd.DataFrame,
+    df_anterior: pd.DataFrame | None = None,
+) -> dict:
+    """
+    KPIs de cobertura y estado de la cartera de clientes.
+    """
+```
+
+## Parameters
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Sales transactions for the current period. Must contain:
+  - `id_cliente`: Customer identifier for each transaction
+  
+  Used to identify which customers purchased in the current period.
+</ParamField>
+
+<ParamField path="clientes_df" type="pd.DataFrame" required>
+  Master customer list with columns:
+  - `id_cliente`: Unique customer identifier
+  - `activo`: Boolean flag indicating if customer is active in the system
+  
+  This represents the **total addressable customer base**.
+</ParamField>
+
+<ParamField path="df_anterior" type="pd.DataFrame | None" default="None">
+  Sales transactions from the previous period. Required to calculate:
+  - Churned customers (bought before but not now)
+  - New customers (first purchase in current period)
+  - Reactivated customers (returned after absence)
+</ParamField>
+
+## Return Value
+
+Returns a dictionary with comprehensive coverage metrics:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `clientes_activos_periodo` | `int` | Number of active customers who purchased this period |
+| `clientes_total` | `int` | Total active customers in the portfolio |
+| `cobertura_pct` | `float` | Coverage rate (active buyers / total active customers) |
+| `clientes_perdidos` | `int` | Customers who bought last period but not this period |
+| `clientes_nuevos` | `int` | Customers making their first purchase this period |
+| `clientes_recuperados` | `int` | Previously inactive customers who returned |
+
+## Usage Examples
+
+<CodeGroup>
+
+```python Basic Coverage Calculation
+import pandas as pd
+from datetime import date
+from src.kpi_engine import kpi_cobertura_clientes
+from src.data_loader import cargar_datos
+
+# Load data
+df_ventas, df_clientes, _ = cargar_datos('data/raw/mock_data.xlsx')
+
+# Filter current period
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 3, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 3, 31)))
+]
+
+# Calculate coverage
+coverage = kpi_cobertura_clientes(
+    df=df_marzo,
+    clientes_df=df_clientes
+)
+
+print(f"Active Customers: {coverage['clientes_activos_periodo']}")
+print(f"Total Portfolio: {coverage['clientes_total']}")
+print(f"Coverage Rate: {coverage['cobertura_pct']:.1%}")
+```
+
+```python With Churn Analysis
+from src.kpi_engine import kpi_cobertura_clientes
+import pandas as pd
+from datetime import date
+
+# Current period
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 3, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 3, 31)))
+]
+
+# Previous period
+df_febrero = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 2, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 2, 28)))
+]
+
+# Calculate with churn metrics
+coverage = kpi_cobertura_clientes(
+    df=df_marzo,
+    clientes_df=df_clientes,
+    df_anterior=df_febrero
+)
+
+print("=== CUSTOMER PORTFOLIO HEALTH ===")
+print(f"\nActive This Period: {coverage['clientes_activos_periodo']}")
+print(f"Coverage: {coverage['cobertura_pct']:.1%}")
+print(f"\nCustomer Movement:")
+print(f"  New: +{coverage['clientes_nuevos']}")
+print(f"  Reactivated: +{coverage['clientes_recuperados']}")
+print(f"  Churned: -{coverage['clientes_perdidos']}")
+
+# Net customer change
+net_change = (coverage['clientes_nuevos'] + 
+              coverage['clientes_recuperados'] - 
+              coverage['clientes_perdidos'])
+print(f"\nNet Change: {net_change:+d}")
+```
+
+```python Coverage Alert System
+from src.kpi_engine import kpi_cobertura_clientes
+
+# Define thresholds
+COVERAGE_MIN = 0.60  # 60% minimum
+COVERAGE_TARGET = 0.75  # 75% target
+CHURN_ALERT_THRESHOLD = 10  # Alert if 10+ customers churned
+
+coverage = kpi_cobertura_clientes(
+    df=df_marzo,
+    clientes_df=df_clientes,
+    df_anterior=df_febrero
+)
+
+# Coverage alerts
+if coverage['cobertura_pct'] < COVERAGE_MIN:
+    print(f"🚨 CRITICAL: Coverage at {coverage['cobertura_pct']:.1%} is below minimum")
+    print(f"   {coverage['clientes_total'] - coverage['clientes_activos_periodo']} customers not served")
+elif coverage['cobertura_pct'] < COVERAGE_TARGET:
+    print(f"⚠️  WARNING: Coverage at {coverage['cobertura_pct']:.1%} below target")
+    gap = int((COVERAGE_TARGET - coverage['cobertura_pct']) * coverage['clientes_total'])
+    print(f"   Need {gap} more active customers to reach target")
+else:
+    print(f"✅ Coverage at {coverage['cobertura_pct']:.1%} meets target")
+
+# Churn alerts
+if coverage['clientes_perdidos'] >= CHURN_ALERT_THRESHOLD:
+    print(f"\n🚨 CHURN ALERT: {coverage['clientes_perdidos']} customers lost")
+    print(f"   Action: Review churned customer list and assign recovery tasks")
+
+# Positive signals
+if coverage['clientes_nuevos'] > coverage['clientes_perdidos']:
+    print(f"\n📈 Positive: New customers ({coverage['clientes_nuevos']}) exceed churn")
+```
+
+```python By Seller Territory
+from src.kpi_engine import kpi_cobertura_clientes
+
+# Calculate coverage for each seller's territory
+vendedores = df_marzo['id_vendedor'].unique()
+
+print("=== COVERAGE BY SELLER ===")
+for vendedor in vendedores:
+    # Filter sales for this seller
+    df_vend = df_marzo[df_marzo['id_vendedor'] == vendedor]
+    df_vend_ant = df_febrero[df_febrero['id_vendedor'] == vendedor]
+    
+    # Filter customer base for this seller
+    clientes_vend = df_clientes[
+        df_clientes['id_vendedor_asignado'] == vendedor
+    ]
+    
+    coverage = kpi_cobertura_clientes(
+        df=df_vend,
+        clientes_df=clientes_vend,
+        df_anterior=df_vend_ant
+    )
+    
+    status = "✅" if coverage['cobertura_pct'] >= 0.75 else "⚠️"
+    print(f"{status} {vendedor}: {coverage['cobertura_pct']:.1%} "
+          f"({coverage['clientes_activos_periodo']}/{coverage['clientes_total']})")
+```
+
+```python Customer Lifecycle Dashboard
+from src.kpi_engine import kpi_cobertura_clientes
+import pandas as pd
+
+# Calculate coverage for last 3 periods
+periods = [
+    {'name': 'March', 'start': date(2026, 3, 1), 'end': date(2026, 3, 31)},
+    {'name': 'February', 'start': date(2026, 2, 1), 'end': date(2026, 2, 28)},
+    {'name': 'January', 'start': date(2026, 1, 1), 'end': date(2026, 1, 31)},
+]
+
+results = []
+for i, period in enumerate(periods):
+    df_current = df_ventas[
+        (df_ventas['fecha'] >= pd.Timestamp(period['start'])) &
+        (df_ventas['fecha'] <= pd.Timestamp(period['end']))
+    ]
+    
+    df_prev = None
+    if i < len(periods) - 1:
+        prev = periods[i + 1]
+        df_prev = df_ventas[
+            (df_ventas['fecha'] >= pd.Timestamp(prev['start'])) &
+            (df_ventas['fecha'] <= pd.Timestamp(prev['end']))
+        ]
+    
+    coverage = kpi_cobertura_clientes(
+        df=df_current,
+        clientes_df=df_clientes,
+        df_anterior=df_prev
+    )
+    
+    results.append({
+        'Period': period['name'],
+        'Coverage': f"{coverage['cobertura_pct']:.1%}",
+        'Active': coverage['clientes_activos_periodo'],
+        'New': coverage['clientes_nuevos'],
+        'Churned': coverage['clientes_perdidos'],
+        'Net': coverage['clientes_nuevos'] - coverage['clientes_perdidos']
+    })
+
+# Display trend
+df_trend = pd.DataFrame(results)
+print(df_trend.to_string(index=False))
+```
+
+</CodeGroup>
+
+## Business Logic
+
+The function implements sophisticated customer lifecycle tracking:
+
+### 1. Identify Total Portfolio
+```python
+clientes_activos_total = clientes_df[clientes_df["activo"] == True]["id_cliente"].tolist()
+n_total = len(clientes_activos_total)
+```
+
+### 2. Calculate Current Period Buyers
+```python
+compraron = set(df["id_cliente"].unique()) if not df.empty else set()
+n_activos_periodo = len(compraron & set(clientes_activos_total))
+```
+
+### 3. Coverage Rate
+```python
+cobertura = n_activos_periodo / n_total if n_total > 0 else 0.0
+```
+
+### 4. Churn Detection
+Customers who bought last period but not this period:
+```python
+compraron_anterior = set(df_anterior["id_cliente"].unique())
+n_perdidos = len(compraron_anterior - compraron)
+```
+
+### 5. New Customer Identification
+Customers who never purchased before:
+```python
+todos_anteriores = set(df_anterior["id_cliente"].unique())
+n_nuevos = len(compraron - todos_anteriores)
+```
+
+## Key Insights
+
+<AccordionGroup>
+  <Accordion title="What is a 'good' coverage rate?">
+    Coverage benchmarks vary by industry and sales model:
+    
+    - **60-70%**: Minimum acceptable for most B2B distribution
+    - **75-85%**: Healthy coverage indicating good execution
+    - **>85%**: Excellent coverage (may indicate market saturation)
+    
+    Low coverage (less than 60%) usually indicates:
+    - Insufficient sales visit frequency
+    - Territory too large for seller capacity
+    - Inactive customers not being removed from portfolio
+  </Accordion>
+  
+  <Accordion title="When is churn vs. normal customer behavior?">
+    Not all "churned" customers are lost:
+    
+    - **B2B**: Many customers don't buy every period (seasonal, project-based)
+    - **Threshold**: 60+ days without purchase may indicate true churn
+    - **Context matters**: Compare to customer's historical frequency
+    
+    The `kpi_clientes()` function provides `dias_desde_ultima_compra` for deeper analysis.
+  </Accordion>
+  
+  <Accordion title="How to interpret reactivations?">
+    Reactivated customers indicate:
+    
+    - **Successful win-back campaigns**
+    - **Seasonal purchasing patterns**
+    - **Improved seller territory management**
+    
+    High reactivation rates may also signal:
+    - Customer base was incorrectly marked as churned
+    - Need to adjust churn definition timeframe
+  </Accordion>
+</AccordionGroup>
+
+## Integration with Alerts
+
+Coverage metrics trigger:
+
+**ALT006: Low Coverage Alert**
+```python
+if coverage['cobertura_pct'] < 0.60:
+    # Critical alert: Territory underserved
+```
+
+See [Alert Rules](/alerts/alert-rules) for complete logic.
+
+## Dashboard Integration
+
+This function is used in:
+
+- **`app.py`**: Executive Summary coverage card
+- **`pages/1_gerencia.py`**: Team coverage performance
+- **`pages/3_clientes.py`**: Customer portfolio analysis
+- **`src/alerts_engine.py`**: Coverage alerts (ALT006)
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="kpi_clientes" icon="address-card">
+    Detailed per-customer analysis with churn risk flags
+  </Card>
+  <Card title="kpi_por_vendedor" icon="user-tie">
+    Coverage metrics broken down by seller
+  </Card>
+  <Card title="kpi_ventas_periodo" icon="dollar-sign" href="/kpi-engine/sales-metrics">
+    Combine coverage with revenue for full picture
+  </Card>
+  <Card title="Alert Engine" icon="bell" href="/alerts/alert-rules">
+    Automated coverage and churn alerts
+  </Card>
+</CardGroup>
+
+## Source Code Reference
+
+View the complete implementation: `visor_kpi/src/kpi_engine.py:95-135`

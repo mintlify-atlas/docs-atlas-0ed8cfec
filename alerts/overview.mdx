@@ -1,0 +1,143 @@
+---
+title: Alerts System Overview
+description: Real-time business alert and opportunity detection engine
+---
+
+## Purpose
+
+The Alerts System (`alerts_engine.py`) is a **real-time monitoring engine** that continuously evaluates sales data against 7 business rules to detect:
+
+- **Critical performance issues** requiring immediate attention
+- **Business risks** like customer churn or product stagnation
+- **Commercial opportunities** for growth and optimization
+
+## How It Works
+
+The alert engine processes transactional data through a rule-based evaluation system:
+
+```python
+def get_alertas_activas(
+    df: pd.DataFrame,
+    df_anterior: pd.DataFrame | None,
+    clientes_df: pd.DataFrame,
+    productos_df: pd.DataFrame,
+    objetivos_df: pd.DataFrame | None = None,
+    fecha_hasta: date | None = None,
+) -> pd.DataFrame:
+    """
+    Evaluates all rules and returns DataFrame of active alerts.
+    """
+```
+
+### Input Data Sources
+
+| Parameter | Description |
+|-----------|-------------|
+| `df` | Current period sales transactions |
+| `df_anterior` | Previous period data (for comparison rules) |
+| `clientes_df` | Customer master data with categories |
+| `productos_df` | Product catalog |
+| `objetivos_df` | Sales targets by salesperson |
+| `fecha_hasta` | Evaluation cutoff date (defaults to today) |
+
+### Output Alert Structure
+
+Each alert contains:
+
+- **id_alerta**: Rule identifier (ALT001-ALT007)
+- **nombre**: Alert name
+- **severidad**: Severity level (alta, media, baja, info)
+- **entidad_tipo**: Entity type (vendedor, cliente, producto, equipo)
+- **entidad_id** / **entidad_nombre**: Affected entity details
+- **valor_actual** / **valor_referencia**: Current vs. threshold values
+- **descripcion_detalle**: Specific context for this alert
+- **fecha_deteccion**: Detection date
+- **accion_sugerida**: Recommended action
+
+## The 7 Business Rules
+
+The system evaluates these rules on every execution:
+
+<CardGroup cols={2}>
+  <Card title="ALT001: Critical Underperformance" icon="triangle-exclamation" color="#ea5a0c">
+    Salespeople with less than 65% target achievement in last 30 days
+  </Card>
+  <Card title="ALT002: Customer Inactivity" icon="user-slash" color="#f59e0b">
+    Active customers with no purchases in 45+ days
+  </Card>
+  <Card title="ALT003: Key Customer Drop" icon="chart-line-down" color="#ea5a0c">
+    Category A customers with >25% sales decline vs. previous month
+  </Card>
+  <Card title="ALT004: Product Stagnation" icon="box" color="#6b7280">
+    Active products with no sales in 60+ days
+  </Card>
+  <Card title="ALT005: Salesperson Inactivity" icon="user-clock" color="#f59e0b">
+    Salespeople with no transactions in 7+ business days
+  </Card>
+  <Card title="ALT006: Growth Opportunity" icon="arrow-trend-up" color="#10b981">
+    Category B customers growing >30% (upgrade potential)
+  </Card>
+  <Card title="ALT007: Team Near Target" icon="bullseye" color="#10b981">
+    Team at >85% target with 5+ business days remaining
+  </Card>
+</CardGroup>
+
+## How Alerts Are Triggered
+
+### Evaluation Process
+
+1. **Data Aggregation**: The engine groups transactional data by relevant dimensions (salesperson, customer, product)
+2. **Rule Checking**: Each rule's condition is evaluated against aggregated metrics
+3. **Alert Creation**: When thresholds are breached, an alert record is created with context
+4. **Prioritization**: Alerts are sorted by severity (alta → media → baja → info)
+
+### Example: ALT001 Evaluation
+
+```python
+# Filter to last 30 days
+desde_30 = ts_hoy - pd.Timedelta(days=30)
+df_30 = df[df["fecha"] >= desde_30]
+
+# Sum sales by salesperson
+vend_ventas = df_30.groupby("id_vendedor")["importe_neto"].sum()
+
+for vend_id, importe in vend_ventas.items():
+    obj = obj_mes.get(vend_id, 0)
+    if obj > 0:
+        cumpl = importe / obj
+        if cumpl < 0.65:  # Threshold breach!
+            # Create alert...
+```
+
+## Display and Prioritization
+
+### Severity-Based Sorting
+
+Alerts are automatically ordered by severity:
+
+```python
+orden_sev = {"alta": 0, "media": 1, "baja": 2, "info": 3}
+df_alertas["_ord"] = df_alertas["severidad"].map(orden_sev)
+df_alertas = df_alertas.sort_values("_ord")
+```
+
+This ensures **critical issues appear first** in dashboards and reports.
+
+### Dashboard Integration
+
+The alert DataFrame integrates with:
+
+- **Streamlit dashboards** for visual display with color-coded severity badges
+- **Email notifications** for critical alerts (alta severity)
+- **Executive reports** summarizing alert counts by type and severity
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Alert Rules" icon="list-check" href="./alert-rules">
+    Detailed documentation of all 7 rules
+  </Card>
+  <Card title="Severity Levels" icon="signal" href="./severity-levels">
+    Understanding alert priorities and urgency
+  </Card>
+</CardGroup>

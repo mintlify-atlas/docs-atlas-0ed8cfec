@@ -1,97 +1,125 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Visor KPI Comercial"
+description: "Transform Excel spreadsheets into actionable sales intelligence for your commercial team"
 ---
 
-## Setting up
+<div className="hero-section" style={{
+  background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)',
+  borderRadius: '8px',
+  padding: '48px 32px',
+  marginBottom: '32px',
+  border: '1px solid #e0e0e0'
+}}>
+  <h1 style={{
+    fontSize: '48px',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: '16px',
+    fontFamily: 'Inter'
+  }}>
+    Sales Intelligence Dashboard
+  </h1>
+  <p style={{
+    fontSize: '18px',
+    color: '#545454',
+    marginBottom: '24px',
+    maxWidth: '800px',
+    lineHeight: '1.6'
+  }}>
+    Eliminate manual analysis and transform your sales data into KPIs processed automatically. Get real-time insights for managers and sellers with intelligent alerts that detect performance drops and growth opportunities before they impact results.
+  </p>
+  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+    <a href="/quickstart" style={{
+      background: '#94cb04',
+      color: '#1a1a1a',
+      padding: '12px 24px',
+      borderRadius: '6px',
+      textDecoration: 'none',
+      fontWeight: '700',
+      fontSize: '14px',
+      display: 'inline-block'
+    }}>
+      Get Started →
+    </a>
+    <a href="https://excel-to-kpi-dashboard.streamlit.app/" target="_blank" style={{
+      background: 'transparent',
+      color: '#1a1a1a',
+      padding: '12px 24px',
+      border: '1px solid #1a1a1a',
+      borderRadius: '6px',
+      textDecoration: 'none',
+      fontWeight: '700',
+      fontSize: '14px',
+      display: 'inline-block'
+    }}>
+      View Live Demo
+    </a>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+## What Problem Does It Solve?
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Many distribution companies still manage their commercial data with multiple Excel files, manual reports, and hours of work invested in consolidating data that arrives late, scattered, and with errors.
 
-## Make it yours
+**Visor KPI Comercial** eliminates this by:
 
-Design a docs site that looks great and empowers your users.
+- **Automating analysis** — Converts Excel sales files into automatically processed KPIs
+- **Centralizing intelligence** — Managers and sellers access their metrics from a single dashboard
+- **Anticipating problems** — Alert engine detects performance drops, at-risk customers, and growth opportunities
+- **Democratizing data** — Each seller accesses their own individual report; management gets the consolidated team view
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Executive Summary" icon="chart-line" href="/features/executive-summary">
+    Complete business KPIs in one screen — total sales, target achievement, gross margin, and customer coverage
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Sales Team View" icon="users" href="/features/sales-team-view">
+    Monthly evolution, performance comparison, and rankings with variance vs. previous period
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Individual Seller View" icon="user" href="/features/individual-seller-view">
+    Personal dashboard with quota fulfillment, team ranking position, and portfolio details
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Customer Analysis" icon="building" href="/features/customer-analysis">
+    Pareto A/B/C segmentation, Gini concentration index, and at-risk customer identification
   </Card>
-</Columns>
+  <Card title="Product Analysis" icon="box" href="/features/product-analysis">
+    Portfolio treemap, Pareto analysis, inactive SKUs detection, and trend analysis
+  </Card>
+  <Card title="Alerts Center" icon="bell" href="/features/alerts-center">
+    Unified hub with active alerts by severity and automatically detected opportunities
+  </Card>
+</CardGroup>
 
-## Create beautiful pages
+## Quick Links
 
-Everything you need to create world-class documentation.
+<CardGroup cols={3}>
+  <Card title="Installation" icon="download" href="/quickstart">
+    Get up and running in minutes
+  </Card>
+  <Card title="KPI Engine" icon="gauge" href="/kpi-engine/overview">
+    Learn about automated KPI calculation
+  </Card>
+  <Card title="Alert Rules" icon="triangle-exclamation" href="/alerts/alert-rules">
+    Explore 7 intelligent business rules
+  </Card>
+  <Card title="Data Format" icon="file-excel" href="/data/excel-format">
+    Understand Excel file structure
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/kpi-engine">
+    Explore the complete API
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Run automated tests
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Tech Stack
 
-## Need inspiration?
+Built with modern Python tools for performance and reliability:
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+- **Python 3.10+** — Core runtime
+- **Streamlit 1.32** — Multi-page app framework
+- **Plotly 5.19** — Interactive visualizations
+- **Pandas 2.2** — ETL pipeline and data analysis
+- **pytest 8.0** — Automated testing suite

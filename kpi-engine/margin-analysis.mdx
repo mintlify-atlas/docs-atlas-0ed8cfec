@@ -1,0 +1,286 @@
+---
+title: 'Margin Analysis'
+description: 'Calculate gross margin KPIs and profitability metrics with period comparisons'
+icon: 'percent'
+---
+
+## Overview
+
+The `kpi_margen()` function calculates gross margin metrics for a sales period, including total margin amount, average margin percentage, and period-over-period comparisons.
+
+<Note>
+  Margin analysis is critical for understanding **profitability**, not just revenue. A high-volume seller with low margins may be less valuable than a moderate seller with healthy margins.
+</Note>
+
+## Why It Matters
+
+Margin KPIs answer essential profitability questions:
+
+- **Is the business making money?** Revenue without margin visibility can be misleading
+- **Which segments are most profitable?** Compare margin % across sellers, products, or channels
+- **Are margins improving or eroding?** Period comparisons reveal pricing and cost trends
+- **Who needs coaching?** Identify sellers discounting excessively
+
+## Function Signature
+
+```python kpi_engine.py
+def kpi_margen(
+    df: pd.DataFrame,
+    df_anterior: pd.DataFrame | None = None,
+) -> dict:
+    """
+    KPIs de margen bruto.
+    """
+```
+
+## Parameters
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Sales DataFrame for the current period. Must contain columns:
+  - `margen_neto`: Net margin amount per transaction
+  - `importe_neto`: Net sales amount per transaction
+  
+  If `margen_neto` column is missing, returns zero values.
+</ParamField>
+
+<ParamField path="df_anterior" type="pd.DataFrame | None" default="None">
+  Sales DataFrame from the previous period for margin trend analysis. Should contain:
+  - `margen_neto`: Net margin amount
+  
+  When provided, calculates `margen_vs_anterior` (% change in margin).
+</ParamField>
+
+## Return Value
+
+Returns a dictionary with the following structure:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `margen_bruto_total` | `float` | Total gross margin in currency units |
+| `margen_pct_promedio` | `float` | Average margin as a percentage (e.g., 0.25 = 25% margin) |
+| `margen_vs_anterior` | `float \| None` | % change in total margin vs. previous period |
+
+<Info>
+  `margen_pct_promedio` is calculated as total margin divided by total sales, representing the **blended margin rate** for the entire period.
+</Info>
+
+## Usage Examples
+
+<CodeGroup>
+
+```python Basic Margin Calculation
+import pandas as pd
+from datetime import date
+from src.kpi_engine import kpi_margen
+
+# Filter for current period
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 3, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 3, 31)))
+]
+
+# Calculate margin KPIs
+margin = kpi_margen(df=df_marzo)
+
+print(f"Total Margin: ${margin['margen_bruto_total']:,.2f}")
+print(f"Margin %: {margin['margen_pct_promedio']:.1%}")
+```
+
+```python With Period Comparison
+from src.kpi_engine import kpi_margen
+import pandas as pd
+from datetime import date
+
+# Current period
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 3, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 3, 31)))
+]
+
+# Previous period
+df_febrero = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 2, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 2, 28)))
+]
+
+# Calculate with comparison
+margin = kpi_margen(df=df_marzo, df_anterior=df_febrero)
+
+print(f"Current Margin: ${margin['margen_bruto_total']:,.2f}")
+print(f"Margin Rate: {margin['margen_pct_promedio']:.1%}")
+
+if margin['margen_vs_anterior'] is not None:
+    trend = "📈" if margin['margen_vs_anterior'] > 0 else "📉"
+    print(f"Trend: {trend} {margin['margen_vs_anterior']:+.1%} vs previous")
+```
+
+```python By Seller Segment
+from src.kpi_engine import kpi_margen
+
+# Filter for a specific seller
+df_vendedor_1 = df_marzo[df_marzo['id_vendedor'] == 'V001']
+df_vendedor_2 = df_marzo[df_marzo['id_vendedor'] == 'V002']
+
+margin_v1 = kpi_margen(df=df_vendedor_1)
+margin_v2 = kpi_margen(df=df_vendedor_2)
+
+print("=== MARGIN COMPARISON ===")
+print(f"Seller V001: {margin_v1['margen_pct_promedio']:.1%}")
+print(f"Seller V002: {margin_v2['margen_pct_promedio']:.1%}")
+
+if margin_v1['margen_pct_promedio'] > margin_v2['margen_pct_promedio']:
+    print("\n✅ V001 has better margin discipline")
+else:
+    print("\n✅ V002 has better margin discipline")
+```
+
+```python Margin Alert System
+from src.kpi_engine import kpi_margen
+
+# Define margin thresholds
+MARGIN_MIN_THRESHOLD = 0.20  # 20%
+MARGIN_TARGET = 0.25         # 25%
+
+margin = kpi_margen(df=df_marzo)
+current_margin = margin['margen_pct_promedio']
+
+# Alert logic
+if current_margin < MARGIN_MIN_THRESHOLD:
+    print(f"🚨 CRITICAL: Margin at {current_margin:.1%} is below minimum threshold")
+    print(f"   Action required: Review pricing and discounting practices")
+elif current_margin < MARGIN_TARGET:
+    print(f"⚠️  WARNING: Margin at {current_margin:.1%} is below target")
+    print(f"   Gap to target: {(MARGIN_TARGET - current_margin):.1%}")
+else:
+    print(f"✅ Margin at {current_margin:.1%} meets target")
+
+# Trend alert
+if margin['margen_vs_anterior'] is not None:
+    if margin['margen_vs_anterior'] < -0.05:  # 5% decline
+        print(f"\n📉 WARNING: Margin declined {margin['margen_vs_anterior']:.1%} vs previous period")
+```
+
+```python Combined Sales & Margin Analysis
+from src.kpi_engine import kpi_ventas_periodo, kpi_margen
+
+# Calculate both metrics
+sales = kpi_ventas_periodo(df=df_marzo, df_anterior=df_febrero)
+margin = kpi_margen(df=df_marzo, df_anterior=df_febrero)
+
+# Comprehensive dashboard
+print("=== PROFITABILITY DASHBOARD ===")
+print(f"\nRevenue: ${sales['importe_total']:,.2f}")
+print(f"Gross Margin: ${margin['margen_bruto_total']:,.2f}")
+print(f"Margin Rate: {margin['margen_pct_promedio']:.1%}")
+
+print("\n--- Period Comparison ---")
+if sales['importe_vs_anterior'] is not None:
+    print(f"Revenue Growth: {sales['importe_vs_anterior']:+.1%}")
+if margin['margen_vs_anterior'] is not None:
+    print(f"Margin Growth: {margin['margen_vs_anterior']:+.1%}")
+
+# Quality of growth check
+if sales['importe_vs_anterior'] and margin['margen_vs_anterior']:
+    if sales['importe_vs_anterior'] > 0 and margin['margen_vs_anterior'] > 0:
+        print("\n✅ HEALTHY GROWTH: Revenue and margin both increasing")
+    elif sales['importe_vs_anterior'] > 0 and margin['margen_vs_anterior'] < 0:
+        print("\n⚠️  CAUTION: Revenue up but margin declining (possible price erosion)")
+    elif sales['importe_vs_anterior'] < 0 and margin['margen_vs_anterior'] > 0:
+        print("\n⚠️  MIXED: Lower volume but better margins (possible mix shift)")
+```
+
+</CodeGroup>
+
+## Business Logic
+
+The function implements the following calculation sequence:
+
+### 1. Data Validation
+```python
+if df.empty or "margen_neto" not in df.columns:
+    return {"margen_bruto_total": 0, "margen_pct_promedio": 0, "margen_vs_anterior": None}
+```
+
+### 2. Total Margin Calculation
+```python
+margen_total = float(df["margen_neto"].sum())
+importe_total = float(df["importe_neto"].sum())
+```
+
+### 3. Margin Percentage
+Calculates the blended margin rate for the period:
+```python
+margen_pct = margen_total / importe_total if importe_total > 0 else 0.0
+```
+
+<Warning>
+  This is **not** an average of individual transaction margins, but rather total margin divided by total sales. This gives more weight to high-volume transactions.
+</Warning>
+
+### 4. Period Comparison
+```python
+margen_vs_ant = None
+if df_anterior is not None and not df_anterior.empty and "margen_neto" in df_anterior.columns:
+    margen_ant = float(df_anterior["margen_neto"].sum())
+    if margen_ant > 0:
+        margen_vs_ant = (margen_total - margen_ant) / margen_ant
+```
+
+## Key Insights from Margin Analysis
+
+<CardGroup cols={2}>
+  <Card title="Margin Erosion" icon="arrow-trend-down">
+    Declining margin % may indicate competitive pressure, excessive discounting, or cost increases
+  </Card>
+  <Card title="Volume vs. Value" icon="scale-balanced">
+    High revenue with low margins is less valuable than moderate revenue with healthy margins
+  </Card>
+  <Card title="Mix Effects" icon="layer-group">
+    Changes in product or customer mix can impact overall margin independent of pricing
+  </Card>
+  <Card title="Seller Discipline" icon="gavel">
+    Seller-level margin analysis reveals who manages pricing effectively
+  </Card>
+</CardGroup>
+
+## Integration with Alerts
+
+The margin metrics feed into the alert system:
+
+**ALT005: Low Margin Alert**
+```python
+if margin['margen_pct_promedio'] < MARGIN_THRESHOLD:
+    # Trigger critical alert
+```
+
+See the [Alerts Engine documentation](/alerts/alert-rules) for details.
+
+## Dashboard Integration
+
+This function is used in:
+
+- **`app.py`**: Executive Summary margin card
+- **`pages/1_gerencia.py`**: Team-level profitability tracking
+- **`pages/2_vendedores.py`**: Individual seller margin performance
+- **`src/alerts_engine.py`**: Margin threshold alerts (ALT005)
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="kpi_ventas_periodo" icon="dollar-sign" href="/kpi-engine/sales-metrics">
+    Combine with sales metrics for complete profitability view
+  </Card>
+  <Card title="kpi_por_vendedor" icon="user-tie">
+    Break down margins by individual seller
+  </Card>
+  <Card title="kpi_productos" icon="box">
+    Analyze margin by product category
+  </Card>
+  <Card title="kpi_clientes" icon="users">
+    Understand margin by customer segment
+  </Card>
+</CardGroup>
+
+## Source Code Reference
+
+View the complete implementation: `visor_kpi/src/kpi_engine.py:68-92`

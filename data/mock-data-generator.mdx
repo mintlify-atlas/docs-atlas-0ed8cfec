@@ -1,0 +1,424 @@
+---
+title: Mock Data Generator
+description: Generate realistic test data for Visor KPI Comercial with 27 months of sales transactions
+---
+
+## Overview
+
+The mock data generator creates a realistic dataset for testing and demonstration purposes. It generates complete business data for a fictional company (Distribuidora Del Sur S.A.) with 27+ months of transactional history.
+
+<Info>
+Location: `data/mock/generate_mock_data.py:1`
+
+Generation time: ~30 seconds
+</Info>
+
+## Quick Start
+
+<CodeGroup>
+
+```bash Run from project root
+python data/mock/generate_mock_data.py
+```
+
+```bash Run from any directory
+cd ~/workspace/source/visor_kpi
+python data/mock/generate_mock_data.py
+```
+
+</CodeGroup>
+
+**Output:** `data/raw/mock_data.xlsx` (multi-sheet Excel file)
+
+## Generated Data Specifications
+
+### Dataset Size
+
+| Entity | Count | Details |
+|--------|-------|----------|
+| **Salespeople** | 12 | 4 performance profiles, 3 zones |
+| **Customers** | 180 | 4 channels, 15% inactive |
+| **Products** | 60 | 5 categories, 20% low-rotation |
+| **Transactions** | ~30,000 | 27+ months (Jan 2023 - Mar 2026) |
+| **Monthly Targets** | 324 | 12 salespeople × 27 months |
+
+### Time Period
+
+```python
+FECHA_INICIO = date(2023, 1, 1)
+FECHA_FIN    = date(2026, 3, 8)  # "today" for demo
+```
+
+- **Duration**: 27 months + current month
+- **Purpose**: Provides enough history for year-over-year comparisons and trend analysis
+
+### Business Context
+
+**Company:** Distribuidora Del Sur S.A. (fictional distribution company)
+
+**Zones:**
+- GBA Norte (Greater Buenos Aires North)
+- GBA Sur (Greater Buenos Aires South)  
+- Interior
+
+**Sales Channels:**
+- Canal Tradicional (Traditional retail) - 90 customers
+- Supermercadismo (Supermarkets) - 36 customers
+- Mayorista (Wholesalers) - 27 customers
+- HoReCa (Hotels/Restaurants/Cafés) - 27 customers
+
+**Product Categories:**
+- Lácteos (Dairy) - 10 products
+- Almacén (Groceries) - 15 products
+- Bebidas (Beverages) - 15 products
+- Limpieza (Cleaning) - 10 products
+- Perfumería (Personal care) - 10 products
+
+## Salesperson Profiles
+
+The generator creates 12 salespeople with differentiated performance profiles:
+
+```python
+PERFILES_FACTOR = {
+    "estrella":     {"base": 1.20, "sd": 0.08, "mejora": 0.002},  # Top performers
+    "estable":      {"base": 0.95, "sd": 0.08, "mejora": 0.001},  # Consistent
+    "desarrollo":   {"base": 0.75, "sd": 0.10, "mejora": 0.005},  # Improving
+    "problematico": {"base": 0.62, "sd": 0.15, "mejora": 0.000},  # Struggling
+}
+```
+
+**Profile distribution:**
+- **Estrellas** (Stars): 3 salespeople - High performers, 120% of target
+- **Estables** (Stable): 4 salespeople - Consistent at 95% of target
+- **Desarrollo** (Developing): 3 salespeople - Growing, start at 75%
+- **Problemáticos** (Struggling): 2 salespeople - Underperformers at 62%
+
+**Example salesperson data:**
+
+```python
+(
+    "V001",                      # id_vendedor
+    "Martín Eduardo Gómez",      # nombre_completo
+    "GBA Norte",                 # zona
+    "estrella",                  # perfil
+    2_200_000,                   # objetivo_mensual_base
+    8,                           # antiguedad_años
+    "SUP01",                     # supervisor_id
+    True                         # activo
+)
+```
+
+## Realistic Features
+
+### Seasonality
+
+Monthly variation patterns (`generate_mock_data.py:333`):
+
+```python
+ESTACIONALIDAD = {
+    1: 1.25,  # enero (summer peak)
+    2: 1.00,
+    3: 1.05,
+    # ...
+    7: 0.85,  # julio (winter low)
+    # ...
+    12: 1.25, # diciembre (holiday peak)
+}
+```
+
+### Growth Trends
+
+**Company growth:** 8% annually (≈0.64% monthly)
+
+```python
+def _factor_crecimiento(mes: date) -> float:
+    """Factor de crecimiento acumulado: 8% anual ≈ 0.64% mensual."""
+    meses_transcurridos = (mes.year - FECHA_INICIO.year) * 12 + (mes.month - FECHA_INICIO.month)
+    return (1.0064) ** meses_transcurridos
+```
+
+**Individual targets:** 5% annual increase
+
+```python
+def generar_objetivos(df_vendedores: pd.DataFrame) -> pd.DataFrame:
+    """Objetivo mensual por vendedor, con aumento del 5% anual."""
+    for mes in meses:
+        anios_transcurridos = (mes.year - FECHA_INICIO.year) + (mes.month - FECHA_INICIO.month) / 12
+        obj = round(obj_base * (1.05 ** anios_transcurridos), -3)
+```
+
+### Customer Behavior
+
+**Purchase frequency by channel** (`generate_mock_data.py:349`):
+
+```python
+FRECUENCIA_CANAL = {
+    "Canal Tradicional": (1, 2),   # 1-2 purchases per month
+    "Supermercadismo":   (3, 4),   # 3-4 purchases per month
+    "Mayorista":         (2, 3),   # 2-3 purchases per month
+    "HoReCa":            (1, 2),   # 1-2 purchases per month
+}
+```
+
+**Discount patterns** (`generate_mock_data.py:357`):
+
+```python
+DESCUENTO_CANAL = {
+    "Canal Tradicional": (0.00, 0.03),  # 0-3% discount
+    "Supermercadismo":   (0.05, 0.08),  # 5-8% discount
+    "Mayorista":         (0.08, 0.12),  # 8-12% discount
+    "HoReCa":            (0.00, 0.05),  # 0-5% discount
+}
+```
+
+**Inactive customers:** 15% of customers (27 out of 180)
+- Stop purchasing 3-18 months before `FECHA_FIN`
+- Realistic churn simulation
+
+### Product Mix
+
+Each channel has different category preferences (`generate_mock_data.py:365`):
+
+```python
+MEZCLA_PRODUCTOS = {
+    "Canal Tradicional": {"Lácteos": 15, "Almacén": 40, "Bebidas": 20, "Limpieza": 15, "Perfumería": 10},
+    "Supermercadismo":   {"Lácteos": 20, "Almacén": 25, "Bebidas": 25, "Limpieza": 20, "Perfumería": 10},
+    "Mayorista":         {"Lácteos": 10, "Almacén": 40, "Bebidas": 30, "Limpieza": 15, "Perfumería":  5},
+    "HoReCa":            {"Lácteos": 10, "Almacén": 20, "Bebidas": 50, "Limpieza": 15, "Perfumería":  5},
+}
+```
+
+### Special Cases
+
+**Low-rotation products:**
+- Last 12 products (PRD049-PRD060) have 80% probability of not appearing in transactions
+- Creates realistic long-tail distribution
+
+**Outlier transactions:**
+- 2-3 special large orders per month
+- 50-200 units with 8% special discount
+- Simulates bulk orders or promotions
+
+**Cross-selling:**
+- 3% of transactions assigned to different salesperson
+- Realistic collaboration scenarios
+
+**Inactive salesperson:**
+- Salesperson V012 becomes inactive from July 2024
+- Customers either stop purchasing or are reassigned
+
+## Generation Process
+
+### Step-by-Step
+
+```python
+def main():
+    print("Generando datos mock...")
+
+    print("  • Vendedores...")
+    df_vendedores = generar_vendedores()          # ~5ms
+
+    print("  • Clientes...")
+    df_clientes = generar_clientes(df_vendedores) # ~50ms
+
+    print("  • Productos...")
+    df_productos = generar_productos()            # ~10ms
+
+    print("  • Objetivos...")
+    df_objetivos = generar_objetivos(df_vendedores) # ~100ms
+
+    print("  • Transacciones (puede demorar ~30s)...")
+    df_ventas = generar_transacciones(            # ~30s
+        df_vendedores, df_clientes, df_productos, df_objetivos
+    )
+
+    validar_y_resumir(df_ventas, df_vendedores, df_clientes, df_productos)
+    exportar_excel(df_ventas, df_vendedores, df_clientes, df_productos, df_objetivos)
+
+    print("✅ Generación completada.")
+```
+
+### Validation Report
+
+The generator automatically validates the output:
+
+```
+=======================================================
+  RESUMEN DE VALIDACIÓN — Visor KPI Mock Data
+=======================================================
+✅ Vendedores generados: 12
+✅ Clientes generados: 180 (153 activos, 27 inactivos)
+✅ Productos generados: 60
+✅ Transacciones generadas: 30,245
+✅ Período cubierto: ene-2023 a mar-2026
+✅ Importe total: $2.847.351.284
+✅ Coherencia vendedor-cliente: 97.1% (esperado >96%)
+✅ Estacionalidad dic/ene: +24.3% (esperado ~25%)
+✅ Clientes sin compras últimos 90 días: 31
+✅ Productos bajo rotación (<5% acumulado): 14 (esperado ~12)
+✅ Nulls en campos críticos: 0
+=======================================================
+```
+
+## Output File Structure
+
+**File:** `data/raw/mock_data.xlsx`
+
+**Sheets:**
+1. **Ventas** - ~30,000 transaction rows
+2. **Vendedores** - 12 salesperson records
+3. **Clientes** - 180 customer records
+4. **Productos** - 60 product records
+5. **Objetivos** - 324 monthly target records
+
+**File size:** ~2-3 MB
+
+See [Excel File Format](/data/excel-format) for detailed schema.
+
+## Configuration
+
+### Modify Time Period
+
+Edit constants in `generate_mock_data.py:28-29`:
+
+```python
+FECHA_INICIO = date(2023, 1, 1)  # Start date
+FECHA_FIN    = date(2026, 3, 8)  # End date ("today")
+```
+
+### Reproducibility
+
+Fixed random seeds ensure consistent output:
+
+```python
+random.seed(42)
+np.random.seed(42)
+fake = Faker("es_AR")
+fake.seed_instance(42)
+```
+
+Running the generator multiple times produces identical data.
+
+### Custom Output Location
+
+Modify output path in `generate_mock_data.py:32-34`:
+
+```python
+BASE_DIR    = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+OUTPUT_DIR  = os.path.join(BASE_DIR, "data", "raw")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "mock_data.xlsx")
+```
+
+## Dependencies
+
+Required Python packages:
+
+```python
+import pandas as pd
+import numpy as np
+from faker import Faker
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
+```
+
+Install with:
+
+```bash
+pip install pandas numpy faker python-dateutil openpyxl xlsxwriter
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ModuleNotFoundError: No module named 'faker'">
+    Install missing dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    Or install individually:
+    ```bash
+    pip install faker pandas numpy python-dateutil openpyxl xlsxwriter
+    ```
+  </Accordion>
+
+  <Accordion title="Permission denied error">
+    Ensure the `data/raw/` directory is writable:
+    ```bash
+    mkdir -p data/raw
+    chmod 755 data/raw
+    ```
+    
+    Or run with sudo (not recommended):
+    ```bash
+    sudo python data/mock/generate_mock_data.py
+    ```
+  </Accordion>
+
+  <Accordion title="Generation takes too long (>2 minutes)">
+    Normal generation time is ~30 seconds. If it takes longer:
+    - Check CPU usage (should be ~100% on one core)
+    - Reduce date range or number of customers/products
+    - Close other applications to free memory
+    - Ensure you're using Python 3.9+ for better performance
+  </Accordion>
+
+  <Accordion title="Validation warnings">
+    Some warnings are acceptable:
+    - **⚠️ Transacciones**: 8,000-15,000 range is wide; actual count depends on randomness
+    - **⚠️ Estacionalidad**: ±5% variance from 25% is normal
+    - **⚠️ Productos bajo rotación**: ±3 products variance is acceptable
+    
+    Critical errors (❌) indicate data integrity issues and should be investigated.
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Development" icon="code">
+    Test application features without real customer data
+  </Card>
+  <Card title="Demonstrations" icon="presentation">
+    Showcase KPI dashboard with realistic scenarios
+  </Card>
+  <Card title="Training" icon="graduation-cap">
+    Train sales team on using the system
+  </Card>
+  <Card title="Performance Testing" icon="gauge-high">
+    Validate app performance with realistic data volume
+  </Card>
+</CardGroup>
+
+## Advanced Usage
+
+### Generate Multiple Scenarios
+
+```python
+# Modify PERFILES_FACTOR before running
+PERFILES_FACTOR = {
+    "estrella":     {"base": 1.40, "sd": 0.05, "mejora": 0.003},  # Better performers
+    # ...
+}
+
+# Run from Python
+from data.mock.generate_mock_data import main
+main()
+```
+
+### Custom Customer Distribution
+
+```python
+# Modify in generar_clientes() function
+canales_config = [
+    ("Canal Tradicional",  120, (50_000,  300_000)),  # More traditional customers
+    ("Supermercadismo",     30, (200_000, 800_000)),  # Fewer supermarkets
+    # ...
+]
+```
+
+## See Also
+
+- [Excel File Format](/data/excel-format) - Output file schema
+- [Data Loader](/data/data-loader) - How generated data is loaded
+- `config.py:53` - Data file path configuration

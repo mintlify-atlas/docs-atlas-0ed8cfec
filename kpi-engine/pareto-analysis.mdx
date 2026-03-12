@@ -1,0 +1,491 @@
+---
+title: 'Pareto Analysis (80/20)'
+description: 'Automatic ABC classification and concentration metrics for customers and products'
+icon: 'chart-pie'
+---
+
+## Overview
+
+The Pareto analysis module (`pareto.py`) implements the 80/20 principle for customer and product segmentation. It automatically classifies entities into A/B/C categories and calculates concentration metrics like the Gini index.
+
+<Note>
+  The **Pareto Principle** states that ~80% of results come from ~20% of causes. In commercial terms: **80% of revenue typically comes from 20% of customers**.
+</Note>
+
+## Why It Matters
+
+Pareto analysis enables strategic resource allocation:
+
+- **Identify VIP customers/products** that drive the majority of revenue
+- **Prioritize sales efforts** on high-impact accounts (Category A)
+- **Detect concentration risk** when too few customers control too much revenue
+- **Optimize inventory** by focusing on high-rotation SKUs
+- **Measure inequality** with the Gini coefficient
+
+<Warning>
+  High concentration (Gini > 0.6) indicates **revenue risk**: losing a single A-category customer can significantly impact results.
+</Warning>
+
+## Core Functions
+
+The module provides two main functions:
+
+### 1. `calcular_pareto()` - Classification
+
+Adds Pareto columns to a DataFrame, classifying each row as A/B/C.
+
+### 2. `get_concentracion_pareto()` - Metrics
+
+Calculates aggregate concentration statistics including the Gini index.
+
+---
+
+## `calcular_pareto()`
+
+### Function Signature
+
+```python pareto.py
+def calcular_pareto(
+    df: pd.DataFrame,
+    columna_valor: str,
+    columna_id: str,
+) -> pd.DataFrame:
+    """
+    Agrega columnas de Pareto al DataFrame.
+
+    Returns:
+        DataFrame con columnas adicionales:
+        - participacion_pct   : % del total (0-1)
+        - acumulado_pct       : % acumulado ordenado desc (0-1)
+        - categoria_pareto    : 'A' (0-80%), 'B' (80-95%), 'C' (95-100%)
+    """
+```
+
+### Parameters
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame to classify. Can contain customers, products, or any entity to analyze.
+</ParamField>
+
+<ParamField path="columna_valor" type="str" required>
+  Name of the column containing the value to analyze (e.g., `"importe_total"`, `"cantidad"`)
+</ParamField>
+
+<ParamField path="columna_id" type="str" required>
+  Name of the column containing the entity identifier (e.g., `"id_cliente"`, `"id_producto"`)
+  
+  Not directly used in calculation, but useful for documentation purposes.
+</ParamField>
+
+### Return Value
+
+Returns the **original DataFrame** with three additional columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `participacion_pct` | `float` | Individual contribution (e.g., 0.15 = 15% of total) |
+| `acumulado_pct` | `float` | Cumulative percentage when sorted descending (0-1) |
+| `categoria_pareto` | `str` | Classification: `"A"`, `"B"`, or `"C"` |
+
+**Category definitions:**
+- **A**: Cumulative ≤ 80% (the vital few)
+- **B**: Cumulative 80-95% (the middle)
+- **C**: Cumulative 95-100% (the trivial many)
+
+### Usage Examples
+
+<CodeGroup>
+
+```python Customer Classification
+import pandas as pd
+from src.pareto import calcular_pareto
+from src.kpi_engine import kpi_clientes
+from src.data_loader import cargar_datos
+
+# Load data
+df_ventas, df_clientes, _ = cargar_datos('data/raw/mock_data.xlsx')
+
+# Calculate customer KPIs (already includes Pareto)
+df_customers = kpi_clientes(
+    df=df_ventas,
+    clientes_df=df_clientes,
+    fecha_hasta=date(2026, 3, 31)
+)
+
+# View classification
+print("=== CUSTOMER PARETO ===")
+for categoria in ['A', 'B', 'C']:
+    subset = df_customers[df_customers['categoria_pareto'] == categoria]
+    n = len(subset)
+    revenue = subset['importe_total'].sum()
+    print(f"Category {categoria}: {n} customers, ${revenue:,.0f}")
+
+# Show top customers
+top_customers = df_customers[df_customers['categoria_pareto'] == 'A'].head(10)
+print("\nTop 10 Customers:")
+for _, row in top_customers.iterrows():
+    print(f"  {row['razon_social']}: ${row['importe_total']:,.0f} "
+          f"({row['participacion_pct']:.1%})")
+```
+
+```python Product Classification
+from src.pareto import calcular_pareto
+import pandas as pd
+
+# Aggregate sales by product
+df_productos = df_ventas.groupby('id_producto').agg(
+    importe_total=('importe_neto', 'sum'),
+    unidades=('cantidad', 'sum'),
+    descripcion=('descripcion', 'first'),
+    categoria=('categoria', 'first')
+).reset_index()
+
+# Apply Pareto classification
+df_productos = calcular_pareto(
+    df=df_productos,
+    columna_valor='importe_total',
+    columna_id='id_producto'
+)
+
+# Identify SKUs to focus on
+print("=== PRODUCT FOCUS AREAS ===")
+productos_a = df_productos[df_productos['categoria_pareto'] == 'A']
+print(f"Focus on {len(productos_a)} A-category products:")
+for _, prod in productos_a.iterrows():
+    print(f"  {prod['descripcion']}: {prod['participacion_pct']:.1%} of revenue")
+
+# Identify long-tail products
+productos_c = df_productos[df_productos['categoria_pareto'] == 'C']
+print(f"\nConsider discontinuing {len(productos_c)} C-category products")
+print(f"They represent only {productos_c['participacion_pct'].sum():.1%} of revenue")
+```
+
+```python Manual Pareto Application
+from src.pareto import calcular_pareto
+import pandas as pd
+
+# Create sample data
+data = pd.DataFrame({
+    'vendedor': ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve'],
+    'ventas': [50000, 35000, 8000, 5000, 2000]
+})
+
+# Apply Pareto
+data = calcular_pareto(
+    df=data,
+    columna_valor='ventas',
+    columna_id='vendedor'
+)
+
+# Display results
+print(data[['vendedor', 'ventas', 'participacion_pct', 
+            'acumulado_pct', 'categoria_pareto']].to_string(index=False))
+
+# Output:
+# vendedor  ventas  participacion_pct  acumulado_pct categoria_pareto
+#    Alice   50000              0.500          0.500                A
+#      Bob   35000              0.350          0.850                B
+#  Charlie    8000              0.080          0.930                B
+#    Diana    5000              0.050          0.980                C
+#      Eve    2000              0.020          1.000                C
+```
+
+```python Inventory Optimization
+from src.pareto import calcular_pareto
+
+# Analyze product rotation
+df_inventario = df_ventas.groupby('id_producto').agg(
+    rotacion=('cantidad', 'sum'),
+    descripcion=('descripcion', 'first'),
+    categoria=('categoria', 'first')
+).reset_index()
+
+df_inventario = calcular_pareto(
+    df=df_inventario,
+    columna_valor='rotacion',
+    columna_id='id_producto'
+)
+
+# Stocking recommendations
+print("=== INVENTORY RECOMMENDATIONS ===")
+
+# A products: Never stock out
+a_products = df_inventario[df_inventario['categoria_pareto'] == 'A']
+print(f"\n✅ CRITICAL ({len(a_products)} SKUs): Maintain high stock levels")
+for _, p in a_products.iterrows():
+    print(f"   {p['descripcion']}: {p['participacion_pct']:.1%} of volume")
+
+# C products: Consider reducing inventory
+c_products = df_inventario[df_inventario['categoria_pareto'] == 'C']
+print(f"\n⚠️  LOW ROTATION ({len(c_products)} SKUs): Reduce stock or discontinue")
+print(f"   Combined rotation: {c_products['participacion_pct'].sum():.1%}")
+```
+
+</CodeGroup>
+
+### Business Logic
+
+```python
+# 1. Sort descending by value
+df = df.sort_values(columna_valor, ascending=False).reset_index(drop=True)
+
+# 2. Calculate individual participation
+total = df[columna_valor].sum()
+df["participacion_pct"] = df[columna_valor] / total
+
+# 3. Calculate cumulative percentage
+df["acumulado_pct"] = df["participacion_pct"].cumsum()
+
+# 4. Assign category based on cumulative
+def _cat(acum: float) -> str:
+    if acum <= 0.80:
+        return "A"
+    elif acum <= 0.95:
+        return "B"
+    return "C"
+
+df["categoria_pareto"] = df["acumulado_pct"].apply(_cat)
+```
+
+---
+
+## `get_concentracion_pareto()`
+
+### Function Signature
+
+```python pareto.py
+def get_concentracion_pareto(
+    df: pd.DataFrame,
+    columna_valor: str = "importe_total",
+) -> dict:
+    """
+    Métricas de concentración de Pareto.
+
+    Returns:
+        dict con:
+        - pct_entidades_A  : % de entidades en categoría A
+        - pct_ventas_A     : % de ventas que representan
+        - n_entidades_A    : cantidad
+        - indice_gini      : índice de concentración (0-1)
+    """
+```
+
+### Parameters
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame that has already been processed by `calcular_pareto()`. Must contain:
+  - `categoria_pareto` column
+  - The value column specified in `columna_valor`
+</ParamField>
+
+<ParamField path="columna_valor" type="str" default="importe_total">
+  Name of the column containing the metric to analyze.
+</ParamField>
+
+### Return Value
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `pct_entidades_A` | `float` | % of entities in Category A (e.g., 0.20 = 20%) |
+| `pct_ventas_A` | `float` | % of total value from Category A (typically ~0.80) |
+| `n_entidades_A` | `int` | Absolute count of A-category entities |
+| `indice_gini` | `float` | Gini coefficient (0 = perfect equality, 1 = total inequality) |
+
+<Info>
+  **Gini Index Interpretation:**
+  - **0.0-0.3**: Low concentration (distributed)
+  - **0.3-0.5**: Moderate concentration (typical)
+  - **0.5-0.7**: High concentration (risky)
+  - **0.7-1.0**: Extreme concentration (dangerous)
+</Info>
+
+### Usage Examples
+
+<CodeGroup>
+
+```python Customer Concentration Analysis
+from src.pareto import calcular_pareto, get_concentracion_pareto
+from src.kpi_engine import kpi_clientes
+
+# Get customer KPIs with Pareto classification
+df_customers = kpi_clientes(
+    df=df_ventas,
+    clientes_df=df_clientes,
+    fecha_hasta=date(2026, 3, 31)
+)
+
+# Calculate concentration metrics
+conc = get_concentracion_pareto(df_customers, columna_valor='importe_total')
+
+print("=== CUSTOMER CONCENTRATION ===")
+print(f"Category A Customers: {conc['n_entidades_A']} ({conc['pct_entidades_A']:.1%})")
+print(f"Revenue from A Customers: {conc['pct_ventas_A']:.1%}")
+print(f"Gini Coefficient: {conc['indice_gini']:.3f}")
+
+# Risk assessment
+if conc['indice_gini'] > 0.6:
+    print("\n🚨 HIGH CONCENTRATION RISK")
+    print(f"   {conc['pct_ventas_A']:.0%} of revenue from just "
+          f"{conc['pct_entidades_A']:.0%} of customers")
+    print("   Recommendation: Diversify customer base")
+elif conc['indice_gini'] > 0.4:
+    print("\n⚠️  MODERATE CONCENTRATION")
+    print("   Monitor A-category customer health closely")
+else:
+    print("\n✅ HEALTHY DISTRIBUTION")
+    print("   Revenue well-distributed across customer base")
+```
+
+```python Product Portfolio Analysis
+from src.pareto import calcular_pareto, get_concentracion_pareto
+
+# Get product sales
+df_products = df_ventas.groupby('id_producto').agg(
+    importe_total=('importe_neto', 'sum')
+).reset_index()
+
+df_products = calcular_pareto(
+    df=df_products,
+    columna_valor='importe_total',
+    columna_id='id_producto'
+)
+
+conc = get_concentracion_pareto(df_products)
+
+print("=== PRODUCT PORTFOLIO ===")
+print(f"{conc['n_entidades_A']} products ({conc['pct_entidades_A']:.1%}) "
+      f"generate {conc['pct_ventas_A']:.1%} of revenue")
+
+# Portfolio optimization insight
+if conc['pct_entidades_A'] < 0.15:  # Less than 15% of SKUs
+    print("\n💡 INSIGHT: Very narrow product focus")
+    print(f"   Consider expanding successful product lines")
+elif conc['pct_entidades_A'] > 0.35:  # More than 35% of SKUs
+    print("\n💡 INSIGHT: Broad product portfolio")
+    print(f"   Revenue is well-distributed - healthy diversification")
+```
+
+```python Seller Performance Distribution
+from src.pareto import calcular_pareto, get_concentracion_pareto
+
+# Aggregate by seller
+df_sellers = df_ventas.groupby('id_vendedor').agg(
+    ventas=('importe_neto', 'sum'),
+    nombre=('nombre_vendedor', 'first')
+).reset_index()
+
+df_sellers = calcular_pareto(
+    df=df_sellers,
+    columna_valor='ventas',
+    columna_id='id_vendedor'
+)
+
+conc = get_concentracion_pareto(df_sellers, columna_valor='ventas')
+
+print("=== SALES TEAM DISTRIBUTION ===")
+print(f"Top performers: {conc['n_entidades_A']} sellers ({conc['pct_entidades_A']:.1%})")
+print(f"Their contribution: {conc['pct_ventas_A']:.1%} of total sales")
+print(f"Gini: {conc['indice_gini']:.3f}")
+
+if conc['indice_gini'] > 0.5:
+    print("\n⚠️  TEAM IMBALANCE")
+    print("   A few star sellers carry the team")
+    print("   Action: Invest in training lower performers")
+```
+
+```python Concentration Alert System
+from src.pareto import get_concentracion_pareto
+
+GINI_THRESHOLD_HIGH = 0.6
+GINI_THRESHOLD_CRITICAL = 0.7
+
+def check_concentration_risk(df_classified, entity_type="customers"):
+    conc = get_concentracion_pareto(df_classified)
+    
+    if conc['indice_gini'] >= GINI_THRESHOLD_CRITICAL:
+        return {
+            'severity': 'critical',
+            'message': f"🚨 CRITICAL concentration in {entity_type}",
+            'gini': conc['indice_gini'],
+            'detail': f"{conc['pct_ventas_A']:.0%} from {conc['pct_entidades_A']:.0%}"
+        }
+    elif conc['indice_gini'] >= GINI_THRESHOLD_HIGH:
+        return {
+            'severity': 'high',
+            'message': f"⚠️  HIGH concentration in {entity_type}",
+            'gini': conc['indice_gini'],
+            'detail': f"{conc['pct_ventas_A']:.0%} from {conc['pct_entidades_A']:.0%}"
+        }
+    else:
+        return {
+            'severity': 'ok',
+            'message': f"✅ Healthy distribution of {entity_type}",
+            'gini': conc['indice_gini']
+        }
+
+# Usage
+alert = check_concentration_risk(df_customers, "customers")
+print(alert['message'])
+print(f"Gini: {alert['gini']:.3f}")
+if 'detail' in alert:
+    print(alert['detail'])
+```
+
+</CodeGroup>
+
+### Gini Coefficient Calculation
+
+The Gini index is calculated using the following formula:
+
+```python
+def _calcular_gini(valores: np.ndarray) -> float:
+    """Calcula el índice de Gini (0 = igualdad perfecta, 1 = concentración total)."""
+    if len(valores) == 0:
+        return 0.0
+    valores = np.sort(valores.astype(float))
+    n = len(valores)
+    idx = np.arange(1, n + 1)
+    total = valores.sum()
+    if total == 0:
+        return 0.0
+    return float((2 * (idx * valores).sum() / (n * total)) - (n + 1) / n)
+```
+
+## Integration with KPI Engine
+
+Pareto analysis is automatically integrated into:
+
+- **`kpi_productos()`**: Products are classified and include Pareto columns
+- **`kpi_clientes()`**: Customers are classified with risk flags for A/B customers
+- **Alert Engine (ALT004)**: Excessive concentration triggers alerts
+
+## Dashboard Integration
+
+Used in:
+
+- **`pages/3_clientes.py`**: Customer Pareto charts and concentration metrics
+- **`pages/4_productos.py`**: Product portfolio analysis with ABC classification
+- **`src/alerts_engine.py`**: Concentration risk alerts
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="kpi_clientes" icon="users">
+    Customer KPIs with automatic Pareto classification
+  </Card>
+  <Card title="kpi_productos" icon="box">
+    Product KPIs with Pareto segmentation
+  </Card>
+  <Card title="Alert Engine" icon="bell" href="/alerts/alert-rules">
+    Concentration risk alerts (ALT004)
+  </Card>
+  <Card title="Customer Analysis" icon="chart-scatter">
+    Pareto-based customer segmentation strategies
+  </Card>
+</CardGroup>
+
+## Source Code Reference
+
+- **`calcular_pareto()`**: `visor_kpi/src/pareto.py:11-54`
+- **`get_concentracion_pareto()`**: `visor_kpi/src/pareto.py:57-93`
+- **`_calcular_gini()`**: `visor_kpi/src/pareto.py:96-106`

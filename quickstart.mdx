@@ -1,80 +1,325 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get Visor KPI Comercial up and running in minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- **Python 3.10 or higher** (3.10–3.12 recommended)
+- **Git** for cloning the repository
+- **pip** for package installation
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  This guide uses the mock data generator to create demo data. For production use with real data, see [Data Integration](/data/excel-format).
 </Note>
+
+## Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Visor KPI Comercial repository to your local machine:
+
+    ```bash
+    git clone https://github.com/ricardobing/excel-to-kpi-dashboard.git
+    cd excel-to-kpi-dashboard
+    ```
+
+    Expected output:
+    ```
+    Cloning into 'excel-to-kpi-dashboard'...
+    remote: Enumerating objects: 245, done.
+    remote: Counting objects: 100% (245/245), done.
+    ```
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    Create and activate a Python virtual environment to isolate dependencies:
+
+    <CodeGroup>
+      ```bash Windows
+      python -m venv .venv
+      .venv\Scripts\activate
+      ```
+
+      ```bash macOS/Linux
+      python -m venv .venv
+      source .venv/bin/activate
+      ```
+    </CodeGroup>
+
+    When activated, your terminal prompt should show `(.venv)` at the beginning.
+  </Step>
+
+  <Step title="Install Dependencies">
+    Navigate to the `visor_kpi` directory and install all required packages:
+
+    ```bash
+    cd visor_kpi
+    pip install -r requirements.txt
+    ```
+
+    This will install:
+    - `streamlit>=1.32.0` - Web application framework
+    - `pandas>=2.2.0` - Data manipulation and analysis
+    - `plotly>=5.19.0` - Interactive visualizations
+    - `openpyxl>=3.1.5` - Excel file handling
+    - `numpy>=1.26.4` - Numerical computing
+    - `faker>=23.2.0` - Mock data generation
+    - `pytest>=8.0.0` - Testing framework
+    - `xlsxwriter>=3.1.9` - Excel export functionality
+
+    Expected output:
+    ```
+    Successfully installed streamlit-1.32.0 pandas-2.2.0 plotly-5.19.0 ...
+    ```
+  </Step>
+
+  <Step title="Generate Mock Data">
+    Run the data generator script to create demo sales data:
+
+    ```bash
+    python data/mock/generate_mock_data.py
+    ```
+
+    This generates a complete dataset with:
+    - **12 salespeople** with different performance profiles (star, stable, developing, problematic)
+    - **180 customers** across 4 commercial channels (Traditional, Supermarket, Wholesale, HoReCa)
+    - **60 products** in 5 categories
+    - **~30,000 transactions** spanning 27 months (Jan 2023 – Mar 2026)
+
+    Expected output:
+    ```
+    ✅ Generando vendedores (12)...
+    ✅ Generando clientes (180)...
+    ✅ Generando productos (60)...
+    ✅ Generando transacciones (~30.000)...
+    ✅ Guardando archivo: data/raw/mock_data.xlsx
+    
+    📊 Archivo generado exitosamente: mock_data.xlsx
+    ```
+
+    <Note>
+      The mock data uses `Faker` with Argentine Spanish locale (`es_AR`) to generate realistic names, addresses, and business data.
+    </Note>
+  </Step>
+
+  <Step title="Launch the Application">
+    Start the Streamlit application:
+
+    ```bash
+    streamlit run app.py
+    ```
+
+    Expected output:
+    ```
+    You can now view your Streamlit app in your browser.
+    
+      Local URL: http://localhost:8501
+      Network URL: http://192.168.1.10:8501
+    ```
+
+    The dashboard will automatically open in your default browser at `http://localhost:8501`.
+  </Step>
+</Steps>
+
+## First Steps
+
+Once the application is running, you'll see the **Executive Summary** page. Here's what to explore:
+
+### 1. Understanding the Dashboard Layout
+
+The main dashboard displays:
+
+<CardGroup cols={2}>
+  <Card title="KPI Cards" icon="chart-simple">
+    Top row shows key metrics: Period Sales, Team Achievement, Gross Margin, and Customer Coverage
+  </Card>
+  <Card title="Performance Gauge" icon="gauge-high">
+    Visual representation of overall team quota achievement with traffic light indicators (🟢 green ≥100%, 🟡 orange ≥80%, 🔴 red less than 80%)
+  </Card>
+  <Card title="Sales Evolution" icon="chart-line">
+    Monthly sales trend with target comparison over the last 12 months
+  </Card>
+  <Card title="Top Rankings" icon="ranking-star">
+    Top 5 salespeople, customers, and products by revenue
+  </Card>
+</CardGroup>
+
+### 2. Using the Sidebar Filters
+
+The left sidebar provides powerful filtering options:
+
+```python
+# Available filters:
+- Period selector (predefined ranges or custom dates)
+- Salesperson filter (multi-select)
+- Zone filter (GBA Norte, GBA Sur, Interior)
+- Channel filter (Traditional, Supermarket, Wholesale, HoReCa)
+```
+
+<Tip>
+  Try filtering by different periods to see how the KPIs and visualizations update in real-time.
+</Tip>
+
+### 3. Exploring Multi-Page Views
+
+Navigate through different views using the sidebar menu:
+
+| Page | Purpose | Key Features |
+|------|---------|-------------|
+| **🏠 Resumen Ejecutivo** | High-level business overview | All KPIs at a glance, top performers, active alerts |
+| **📋 Vista Gerencial** | Management team view | Monthly team evolution, salesperson comparison, performance ranking |
+| **👤 Vista por Vendedor** | Individual salesperson dashboard | Personal quota achievement, team position, customer portfolio |
+| **🧑‍🤝‍🧑 Análisis de Clientes** | Customer portfolio analysis | Pareto A/B/C segmentation, Gini index, churn risk detection |
+| **📦 Análisis de Productos** | Product portfolio analysis | Category treemap, Pareto ranking, inactive SKUs, trend analysis |
+| **🚨 Centro de Alertas** | Alert and opportunity hub | Active alerts by severity, suggested actions, opportunity detection |
+
+### 4. Understanding the Alert System
+
+The **Centro de Alertas** page displays automated alerts classified by severity:
+
+<CodeGroup>
+```python Critical Alerts (🔴)
+ALT001: Salesperson with achievement < 70%
+ALT005: Margin below minimum threshold
+```
+
+```python High Priority (🟠)
+ALT002: Customer without purchase in last 30 days
+ALT003: Product with sales drop > 30% MoM
+ALT006: Portfolio coverage < 60%
+```
+
+```python Medium Priority (🟡)
+ALT004: Excessive concentration (Gini > 0.6)
+```
+
+```python Opportunities (🟢)
+ALT007: High-frequency customer with low ticket
+```
+</CodeGroup>
+
+Each alert includes:
+- **Entity name** (salesperson, customer, or product affected)
+- **Detailed description** with specific metrics
+- **Suggested action** for resolution
+
+## Generating Custom Data
+
+You can modify the mock data generator to create custom scenarios:
+
+```python data/mock/generate_mock_data.py
+# Adjust these parameters to customize the dataset:
+
+# Date range
+FECHA_INICIO = date(2023, 1, 1)
+FECHA_FIN    = date(2026, 3, 8)
+
+# Number of entities (see lines 42-63 for salespeople)
+# Number of customers (lines 70-149)
+# Number of products (lines 151-208)
+
+# Performance profiles
+perfiles = ["estrella", "estable", "desarrollo", "problematico"]
+```
+
+After modifying, regenerate the data:
+
+```bash
+python data/mock/generate_mock_data.py
+```
+
+## Running Tests
+
+Validate that everything is working correctly by running the test suite:
+
+```bash
+python -m pytest tests/ -v
+```
+
+Expected output:
+```
+tests/test_mock_data.py::test_dataset_structure PASSED
+tests/test_mock_data.py::test_referential_integrity PASSED
+tests/test_kpis.py::test_kpi_calculation PASSED
+tests/test_alerts.py::test_alert_triggers PASSED
+
+==================== 51 passed in 2.45s ====================
+```
+
+The test suite covers:
+- **Dataset validation**: Referential integrity, null handling, date ranges
+- **KPI engine**: Output structure, calculated values, MoM/YoY deltas
+- **Pareto analysis**: Cumulative scale, A/B/C category assignment, monotonicity
+- **Alert engine**: Correct triggering of each rule (ALT001–ALT007)
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: No module named 'streamlit'">
+    Ensure your virtual environment is activated and dependencies are installed:
+    
+    ```bash
+    # Activate venv first
+    source .venv/bin/activate  # macOS/Linux
+    # or
+    .venv\Scripts\activate     # Windows
+    
+    # Then install
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="Error: No se encontró el archivo de datos">
+    The mock data file hasn't been generated. Run:
+    
+    ```bash
+    python data/mock/generate_mock_data.py
+    ```
+    
+    Ensure you're in the `visor_kpi` directory when running this command.
+  </Accordion>
+
+  <Accordion title="Port 8501 already in use">
+    Another Streamlit instance is running. Either:
+    
+    1. Stop the other instance (Ctrl+C in its terminal)
+    2. Or specify a different port:
+    
+    ```bash
+    streamlit run app.py --server.port 8502
+    ```
+  </Accordion>
+
+  <Accordion title="Dashboard loads slowly">
+    The full dataset contains ~30,000 records. Performance tips:
+    
+    - Use date filters to limit the data range
+    - Filter by specific salespeople or zones
+    - Close other browser tabs to free up memory
+    - For production use, consider implementing caching (see [Performance Optimization](/development/testing))
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Explore System Views" icon="chart-mixed" href="/features/executive-summary">
+    Learn about each dashboard view in detail
+  </Card>
+  <Card title="Understand KPIs" icon="calculator" href="/kpi-engine/overview">
+    Deep dive into the KPI calculation engine
+  </Card>
+  <Card title="Configure Alerts" icon="bell-on" href="/alerts/overview">
+    Customize alert rules and thresholds
+  </Card>
+  <Card title="Integrate Real Data" icon="database" href="/data/excel-format">
+    Connect your own Excel sales data
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Pro tip**: Use the "Personalizado" (Custom) date range in the sidebar to analyze specific periods or compare different time ranges.
+</Tip>

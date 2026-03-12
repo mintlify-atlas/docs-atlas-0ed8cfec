@@ -1,0 +1,293 @@
+---
+title: 'Sales Metrics'
+description: 'Calculate aggregate sales KPIs including revenue, quota compliance, and transaction metrics'
+icon: 'dollar-sign'
+---
+
+## Overview
+
+The `kpi_ventas_periodo()` function computes comprehensive sales metrics for a given period, including total revenue, quota compliance, transaction counts, and average ticket size with period-over-period comparisons.
+
+<Note>
+  This function is the foundation for the **Executive Summary** dashboard view, providing the top-line metrics that answer "How is the business performing?"
+</Note>
+
+## Why It Matters
+
+Sales metrics are the primary indicator of commercial performance. This function enables:
+
+- **Performance tracking** against monthly/quarterly objectives
+- **Trend identification** through period comparisons
+- **Early warning signals** when actual sales deviate from targets
+- **Customer behavior insights** via transaction count and average ticket analysis
+
+## Function Signature
+
+```python kpi_engine.py
+def kpi_ventas_periodo(
+    df: pd.DataFrame,
+    df_anterior: pd.DataFrame | None = None,
+    objetivos_df: pd.DataFrame | None = None,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+) -> dict:
+    """
+    KPIs agregados de ventas para el período.
+
+    Returns dict con:
+        importe_total, importe_vs_anterior, objetivo_total,
+        cumplimiento_pct, transacciones_count, ticket_promedio
+    """
+```
+
+## Parameters
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Sales DataFrame filtered for the target period. Must contain columns:
+  - `importe_neto`: Net sales amount
+  - `id_cliente`: Customer identifier
+  - `id_venta`: Transaction identifier
+</ParamField>
+
+<ParamField path="df_anterior" type="pd.DataFrame | None" default="None">
+  Sales DataFrame from the previous period for comparison. When provided, calculates `importe_vs_anterior` (% change).
+</ParamField>
+
+<ParamField path="objetivos_df" type="pd.DataFrame | None" default="None">
+  Objectives DataFrame with columns:
+  - `periodo`: Period date (timestamp)
+  - `objetivo`: Sales target/quota amount
+  
+  Required for quota compliance calculation.
+</ParamField>
+
+<ParamField path="fecha_desde" type="date | None" default="None">
+  Start date of the analysis period. Used to filter objectives DataFrame.
+</ParamField>
+
+<ParamField path="fecha_hasta" type="date | None" default="None">
+  End date of the analysis period. Used to filter objectives DataFrame.
+</ParamField>
+
+## Return Value
+
+Returns a dictionary with the following keys:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `importe_total` | `float` | Total net sales amount for the period |
+| `importe_vs_anterior` | `float \| None` | % change vs. previous period (e.g., 0.15 = +15%) |
+| `objetivo_total` | `float` | Sum of objectives/quotas for the period |
+| `cumplimiento_pct` | `float \| None` | Quota compliance ratio (e.g., 1.05 = 105% compliance) |
+| `transacciones_count` | `int` | Number of sales transactions |
+| `ticket_promedio` | `float` | Average ticket (sales per unique customer) |
+| `clientes_unicos` | `int` | Number of unique customers who purchased |
+
+## Usage Examples
+
+<CodeGroup>
+
+```python Basic Usage
+import pandas as pd
+from datetime import date
+from src.kpi_engine import kpi_ventas_periodo
+
+# Assuming df_ventas is already loaded
+fecha_desde = date(2026, 3, 1)
+fecha_hasta = date(2026, 3, 31)
+
+# Filter for March 2026
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(fecha_desde)) &
+    (df_ventas['fecha'] <= pd.Timestamp(fecha_hasta))
+]
+
+# Calculate basic KPIs
+kpis = kpi_ventas_periodo(df=df_marzo)
+
+print(f"Total Sales: ${kpis['importe_total']:,.2f}")
+print(f"Transactions: {kpis['transacciones_count']}")
+print(f"Unique Customers: {kpis['clientes_unicos']}")
+print(f"Average Ticket: ${kpis['ticket_promedio']:,.2f}")
+```
+
+```python With Period Comparison
+from src.kpi_engine import kpi_ventas_periodo
+import pandas as pd
+from datetime import date
+
+# Current period (March 2026)
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 3, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 3, 31)))
+]
+
+# Previous period (February 2026)
+df_febrero = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(date(2026, 2, 1))) &
+    (df_ventas['fecha'] <= pd.Timestamp(date(2026, 2, 28)))
+]
+
+kpis = kpi_ventas_periodo(
+    df=df_marzo,
+    df_anterior=df_febrero
+)
+
+if kpis['importe_vs_anterior'] is not None:
+    delta = kpis['importe_vs_anterior']
+    direction = "↑" if delta > 0 else "↓"
+    print(f"vs. Previous Period: {direction} {abs(delta):.1%}")
+```
+
+```python With Quota Tracking
+from src.kpi_engine import kpi_ventas_periodo
+from datetime import date
+
+fecha_desde = date(2026, 3, 1)
+fecha_hasta = date(2026, 3, 31)
+
+# Filter sales data
+df_marzo = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(fecha_desde)) &
+    (df_ventas['fecha'] <= pd.Timestamp(fecha_hasta))
+]
+
+# Calculate with objectives
+kpis = kpi_ventas_periodo(
+    df=df_marzo,
+    objetivos_df=df_objetivos,
+    fecha_desde=fecha_desde,
+    fecha_hasta=fecha_hasta
+)
+
+print(f"Sales: ${kpis['importe_total']:,.2f}")
+print(f"Quota: ${kpis['objetivo_total']:,.2f}")
+
+if kpis['cumplimiento_pct'] is not None:
+    compliance = kpis['cumplimiento_pct'] * 100
+    status = "✅" if compliance >= 100 else "⚠️" if compliance >= 80 else "❌"
+    print(f"Compliance: {status} {compliance:.1f}%")
+```
+
+```python Complete Dashboard Context
+from src.kpi_engine import kpi_ventas_periodo
+from src.data_loader import cargar_datos
+from datetime import date
+import pandas as pd
+
+# Load data
+df_ventas, df_clientes, df_objetivos = cargar_datos('data/raw/mock_data.xlsx')
+
+# Define periods
+current_start = date(2026, 3, 1)
+current_end = date(2026, 3, 31)
+prev_start = date(2026, 2, 1)
+prev_end = date(2026, 2, 28)
+
+# Filter data
+df_current = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(current_start)) &
+    (df_ventas['fecha'] <= pd.Timestamp(current_end))
+]
+
+df_previous = df_ventas[
+    (df_ventas['fecha'] >= pd.Timestamp(prev_start)) &
+    (df_ventas['fecha'] <= pd.Timestamp(prev_end))
+]
+
+# Calculate comprehensive KPIs
+kpis = kpi_ventas_periodo(
+    df=df_current,
+    df_anterior=df_previous,
+    objetivos_df=df_objetivos,
+    fecha_desde=current_start,
+    fecha_hasta=current_end
+)
+
+# Display dashboard metrics
+print("=== SALES DASHBOARD ===")
+print(f"Period: {current_start} to {current_end}")
+print(f"\nRevenue: ${kpis['importe_total']:,.2f}")
+print(f"Quota: ${kpis['objetivo_total']:,.2f}")
+print(f"Compliance: {kpis['cumplimiento_pct']:.1%}" if kpis['cumplimiento_pct'] else "Compliance: N/A")
+print(f"\nTransactions: {kpis['transacciones_count']:,}")
+print(f"Unique Customers: {kpis['clientes_unicos']:,}")
+print(f"Avg Ticket: ${kpis['ticket_promedio']:,.2f}")
+if kpis['importe_vs_anterior']:
+    print(f"\nMoM Growth: {kpis['importe_vs_anterior']:+.1%}")
+```
+
+</CodeGroup>
+
+## Business Logic
+
+The function implements the following calculation logic:
+
+### 1. Total Sales
+```python
+importe_total = df["importe_neto"].sum()
+```
+
+### 2. Transaction Metrics
+```python
+n_transacciones = len(df)
+clientes_unicos = df["id_cliente"].nunique()
+```
+
+### 3. Average Ticket
+Calculated as total sales divided by unique customers (not by transactions):
+```python
+ticket_prom = importe_total / clientes_unicos if clientes_unicos > 0 else 0.0
+```
+
+### 4. Quota Compliance
+Filters objectives for the period and calculates the compliance ratio:
+```python
+mask = (
+    (objetivos_df["periodo"] >= pd.Timestamp(fecha_desde)) &
+    (objetivos_df["periodo"] <= pd.Timestamp(fecha_hasta))
+)
+objetivo_total = objetivos_df[mask]["objetivo"].sum()
+cumplimiento = importe_total / objetivo_total if objetivo_total > 0 else None
+```
+
+### 5. Period Comparison
+```python
+if df_anterior is not None:
+    imp_ant = df_anterior["importe_neto"].sum()
+    if imp_ant > 0:
+        importe_vs_ant = (importe_total - imp_ant) / imp_ant
+```
+
+## Integration with Dashboards
+
+This function is used in:
+
+- **`app.py`** (Executive Summary): Top-line KPI cards
+- **`pages/1_gerencia.py`** (Management View): Overall team performance
+- **Alert Engine**: Triggers quota compliance alerts (ALT001)
+
+<Tip>
+  The function returns `None` for comparison metrics when previous period data is unavailable, allowing dashboards to gracefully handle missing data.
+</Tip>
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="kpi_margen" icon="percent" href="/kpi-engine/margin-analysis">
+    Calculate profitability metrics alongside sales
+  </Card>
+  <Card title="kpi_por_vendedor" icon="user-tie">
+    Break down these metrics by individual seller
+  </Card>
+  <Card title="kpi_evolucion_mensual" icon="chart-line">
+    Track these metrics over time for trend analysis
+  </Card>
+  <Card title="generar_insight_ejecutivo" icon="lightbulb">
+    Generate automated insights from these KPIs
+  </Card>
+</CardGroup>
+
+## Source Code Reference
+
+View the complete implementation: `visor_kpi/src/kpi_engine.py:20-65`

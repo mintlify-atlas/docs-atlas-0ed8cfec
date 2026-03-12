@@ -1,0 +1,388 @@
+---
+title: 'Alerts Center'
+description: 'Unified hub for all active alerts, opportunities, and suggested actions with severity classification'
+icon: 'bell'
+---
+
+## Overview
+
+The **Alerts Center** (Centro de Alertas y Oportunidades) is a proactive monitoring hub that automatically detects performance issues, risk situations, and growth opportunities across all business dimensions. Instead of discovering problems after they impact results, the system provides early warnings with context and recommended next steps.
+
+<CardGroup cols={2}>
+  <Card title="Automatic Detection" icon="radar">
+    7 pre-configured business rules continuously monitor for issues and opportunities
+  </Card>
+  <Card title="Severity Classification" icon="traffic-light">
+    Alerts categorized as Critical, Medium, Low, or Opportunity for proper prioritization
+  </Card>
+  <Card title="Suggested Actions" icon="lightbulb">
+    Each alert includes specific recommended actions based on business logic
+  </Card>
+  <Card title="Review Management" icon="check-circle">
+    Mark alerts as reviewed to track progress and filter your view
+  </Card>
+</CardGroup>
+
+## Alert Severity Levels
+
+### 🔴 Critical (Alta)
+Issues requiring immediate attention that significantly impact business results.
+
+**Examples:**
+- Seller with compliance less than 70% (ALT001)
+- Margin below minimum threshold (ALT005)
+
+**Expected response time:** Within 24 hours
+
+### 🟡 Medium (Media)
+Important issues that should be addressed soon to prevent escalation.
+
+**Examples:**
+- Customer without purchase in last 30 days (ALT002)
+- Product with sales drop greater than 30% MoM (ALT003)
+- Customer coverage less than 60% (ALT006)
+
+**Expected response time:** Within 1 week
+
+### 🔵 Low (Baja)
+Informational items to monitor but not urgent.
+
+**Examples:**
+- Minor performance variations
+- Seasonal pattern notifications
+
+**Expected response time:** As time permits
+
+### 🟢 Opportunity (Info)
+Positive signals indicating growth potential or success.
+
+**Examples:**
+- High-frequency customer with low ticket (ALT007)
+- Fast-growing products
+- New customer acquisition
+
+**Expected response time:** Plan strategic actions
+
+<Info>
+The severity level determines the alert's visual treatment in the interface and its priority in the list.
+</Info>
+
+## Implementation Details
+
+The Alerts Center is implemented in `visor_kpi/pages/5_alertas.py`.
+
+### Data Loading and Alert Generation
+
+```python
+with st.spinner("Evaluando alertas..."):
+    data    = load_data()
+    df      = get_filtered_data(fecha_desde, fecha_hasta, 
+                                vendedores_sel, zonas_sel, canales_sel)
+    df_ant  = get_filtered_data_periodo_anterior(fecha_desde, fecha_hasta, 
+                                                  vendedores_sel, zonas_sel, canales_sel)
+    cli_df  = data["clientes"]
+    prod_df = data["productos"]
+    obj_df  = data["objetivos"]
+    alertas = get_alertas_activas(df, df_ant, cli_df, prod_df, obj_df, fecha_hasta)
+```
+
+The `get_alertas_activas()` function evaluates all alert rules and returns a DataFrame with active alerts.
+
+### Session State for Review Tracking
+
+```python
+if "alertas_revisadas" not in st.session_state:
+    st.session_state["alertas_revisadas"] = set()
+```
+
+The application tracks which alerts have been marked as reviewed during the current session.
+
+## Alert Dashboard
+
+### Summary Metrics
+
+At the top, five cards summarize alert status:
+
+```python
+n_alta  = len(alertas[alertas["severidad"] == "alta"])
+n_media = len(alertas[alertas["severidad"] == "media"])
+n_baja  = len(alertas[alertas["severidad"] == "baja"])
+n_info  = len(alertas[alertas["severidad"] == "info"])
+
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("🔴 Críticas", n_alta)
+c2.metric("🟡 Medias", n_media)
+c3.metric("🔵 Bajas", n_baja)
+c4.metric("🟢 Oportunidades", n_info)
+c5.metric("Total alertas", len(alertas))
+```
+
+### Alert Filtering
+
+Three-dimensional filtering for alert management:
+
+```python
+with col_f1:
+    sev_filter = st.multiselect(
+        "Severidad",
+        ["alta", "media", "baja", "info"],
+        default=[],
+        format_func=lambda x: {"alta": "🔴 Crítica", "media": "🟡 Media",
+                                "baja": "🔵 Baja", "info": "🟢 Oportunidad"}.get(x, x),
+        key="_sev_filter",
+    )
+with col_f2:
+    tipo_filter = st.multiselect(
+        "Tipo de entidad",
+        alertas["entidad_tipo"].unique().tolist() if not alertas.empty else [],
+        default=[],
+        key="_tipo_filter",
+    )
+with col_f3:
+    mostrar_revisadas = st.checkbox("Ocultar revisadas", value=True, key="_hide_rev")
+
+# Apply filters
+alertas_vis = alertas.copy()
+if sev_filter:
+    alertas_vis = alertas_vis[alertas_vis["severidad"].isin(sev_filter)]
+if tipo_filter:
+    alertas_vis = alertas_vis[alertas_vis["entidad_tipo"].isin(tipo_filter)]
+if mostrar_revisadas:
+    alertas_vis = alertas_vis[
+        ~alertas_vis.apply(lambda r: f"{r['id_alerta']}_{r['entidad_id']}", axis=1)
+        .isin(st.session_state["alertas_revisadas"])
+    ]
+```
+
+**Filter options:**
+- **Severidad**: Filter by critical, medium, low, or opportunity
+- **Tipo de entidad**: Filter by seller, customer, or product
+- **Ocultar revisadas**: Hide alerts already marked as reviewed
+
+## Alert Display
+
+### Alert Card Rendering
+
+Each alert is displayed as a rich card:
+
+```python
+for idx, alerta in alertas_vis.iterrows():
+    alerta_key = f"{alerta['id_alerta']}_{alerta['entidad_id']}"
+    ya_revisada = alerta_key in st.session_state["alertas_revisadas"]
+    icon, color = sev_icons.get(alerta["severidad"], ("⚪", COLORS["border"]))
+
+    st.markdown(
+        f"""
+        <div class="alert-card {alerta['severidad']}" 
+             style="opacity:{'0.4' if ya_revisada else '1'}">
+            <div style="display:flex;justify-content:space-between;align-items:start">
+                <div>
+                    <div class="alert-title">
+                        {icon} [{alerta['id_alerta']}] · 
+                        <span style="text-transform:uppercase;font-size:11px;
+                                     background:rgba(255,255,255,0.1);padding:2px 8px;
+                                     border-radius:10px;color:{color}">
+                            {alerta['severidad']}
+                        </span>
+                    </div>
+                    <div style="font-size:15px;font-weight:600;color:{COLORS['text_primary']};
+                                margin:4px 0">{alerta['nombre']}</div>
+                    <div class="alert-detail">
+                        <strong style="color:{COLORS['text_primary']}">{alerta['entidad_nombre']}</strong>
+                        ({alerta['entidad_tipo']}) — {alerta['descripcion_detalle']}
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid {COLORS['border']}">
+                <span style="font-size:11px;color:{COLORS['text_secondary']}">💡 Acción sugerida: </span>
+                <span class="alert-action">{alerta['accion_sugerida']}</span>
+            </div>
+            {'<div style="margin-top:6px;font-size:11px;color:#00C49F">✅ Marcada como revisada</div>' if ya_revisada else ''}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+```
+
+**Alert card components:**
+- Severity icon and badge
+- Alert ID and type
+- Alert name/title
+- Affected entity (seller, customer, or product name)
+- Entity type
+- Detailed description with specific values
+- Suggested action
+- Review status indicator
+
+### Review Action
+
+Each unreviewed alert has an action button:
+
+```python
+if not ya_revisada:
+    col_btn1, col_btn2, _ = st.columns([1, 1, 4])
+    with col_btn1:
+        if st.button("✅ Marcar revisada", key=f"_rev_{alerta_key}", 
+                     help="Marcar como revisada en esta sesión"):
+            st.session_state["alertas_revisadas"].add(alerta_key)
+            st.rerun()
+```
+
+Marking an alert as reviewed:
+1. Adds it to the session state set
+2. Changes its visual appearance (faded opacity)
+3. Can be hidden with the "Ocultar revisadas" filter
+4. Tracked until session ends or history is cleared
+
+<Note>
+Reviewed status is session-based and resets when you reload the application. For production use, consider persisting review status to a database.
+</Note>
+
+## Alert Rules (ALT001-ALT007)
+
+The system includes 7 pre-configured business rules:
+
+### ALT001: Seller with Low Compliance
+**Severity:** 🔴 Critical  
+**Trigger:** Seller compliance less than 70%  
+**Action:** Review with seller, identify obstacles, provide coaching
+
+### ALT002: Customer Without Recent Purchase
+**Severity:** 🟠 High  
+**Trigger:** Customer with no purchase in 30+ days  
+**Action:** Schedule visit, identify issues, offer promotions
+
+### ALT003: Product with Significant Sales Drop
+**Severity:** 🟠 High  
+**Trigger:** Product sales decreased greater than 30% MoM  
+**Action:** Investigate cause, adjust pricing, review competition
+
+### ALT004: Excessive Portfolio Concentration
+**Severity:** 🟡 Medium  
+**Trigger:** Gini index greater than 0.6 (high dependency on few customers)  
+**Action:** Diversify customer base, develop category B customers
+
+### ALT005: Margin Below Threshold
+**Severity:** 🔴 Critical  
+**Trigger:** Gross margin below configured minimum  
+**Action:** Review pricing strategy, reduce discounts, optimize costs
+
+### ALT006: Low Customer Coverage
+**Severity:** 🟠 High  
+**Trigger:** Coverage less than 60% of assigned portfolio  
+**Action:** Increase visit frequency, reassign territories, review capacity
+
+### ALT007: Upsell Opportunity
+**Severity:** 🟢 Opportunity  
+**Trigger:** High-frequency customer with low average ticket  
+**Action:** Promote higher-value products, bundle offerings, increase order size
+
+<Info>
+Alert rules are defined in `src/alerts_engine.py` and can be customized to match your business thresholds and priorities.
+</Info>
+
+## Review History
+
+At the bottom of the page, a summary shows reviewed alerts:
+
+```python
+n_revisadas = len(st.session_state["alertas_revisadas"])
+if n_revisadas > 0:
+    st.markdown(
+        f"<div style='font-size:13px;color:{COLORS['text_secondary']};"
+        f"border-top:1px solid {COLORS['border']};padding-top:12px'>"
+        f"✅ {n_revisadas} alerta(s) marcadas como revisadas en esta sesión</div>",
+        unsafe_allow_html=True,
+    )
+    if st.button("🔄 Limpiar historial de revisadas", key="_clear_rev"):
+        st.session_state["alertas_revisadas"] = set()
+        st.rerun()
+```
+
+**Features:**
+- Shows count of reviewed alerts
+- Button to clear review history
+- Allows re-reviewing alerts if needed
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Daily alert triage">
+    1. Open Alerts Center at start of day
+    2. Review critical (red) alerts first
+    3. Assign actions to team members for each alert
+    4. Mark alerts as reviewed after assignment
+    5. Schedule follow-up to verify resolution
+  </Accordion>
+  
+  <Accordion title="Weekly performance review">
+    1. Filter to "Vendedor" entity type
+    2. Review all seller-related alerts
+    3. Prepare coaching plans for underperformers
+    4. Recognize top performers in opportunity alerts
+    5. Export alert list for meeting documentation
+  </Accordion>
+  
+  <Accordion title="Customer retention campaign">
+    1. Filter to severity "Alta" and entity type "Cliente"
+    2. Export at-risk customer list
+    3. Cross-reference with customer analysis page
+    4. Plan targeted outreach campaigns
+    5. Monitor alert reduction over subsequent weeks
+  </Accordion>
+  
+  <Accordion title="Product optimization">
+    1. Filter to entity type "Producto"
+    2. Identify slow-moving products
+    3. Review products with declining sales
+    4. Plan clearance promotions or discontinuations
+    5. Focus sales efforts on high-margin opportunities
+  </Accordion>
+</AccordionGroup>
+
+## Integration with Other Pages
+
+Alerts are generated from data across all pages:
+
+- **Executive Summary**: Shows first 4 critical alerts
+- **Sales Team View**: Triggers seller performance alerts (ALT001)
+- **Individual Seller View**: Shows personal alerts for selected seller
+- **Customer Analysis**: Generates customer risk alerts (ALT002, ALT004, ALT006, ALT007)
+- **Product Analysis**: Creates product performance alerts (ALT003, ALT005)
+
+Click through from an alert to the relevant detailed page for deeper analysis.
+
+## Customizing Alert Rules
+
+Alert thresholds are configurable in `config.py`:
+
+```python
+config.py
+# Alert thresholds
+UMBRAL_CUMPLIMIENTO_CRITICO = 0.70  # ALT001 threshold
+UMBRAL_DIAS_SIN_COMPRA = 30         # ALT002 threshold
+UMBRAL_CAIDA_VENTAS = 0.30          # ALT003 threshold (30%)
+UMBRAL_GINI_ALTO = 0.60             # ALT004 threshold
+UMBRAL_COBERTURA_BAJA = 0.60        # ALT006 threshold
+```
+
+Adjust these values to match your business requirements and risk tolerance.
+
+## Future Enhancements
+
+Planned features for the Alerts Center:
+
+- Persistent alert status (database storage)
+- Alert assignment to specific users
+- Email/SMS notifications for critical alerts
+- Alert history and trend analysis
+- Custom alert rule builder (no-code)
+- Alert escalation workflows
+- Integration with task management systems
+
+## Related Pages
+
+- [Executive Summary](/features/executive-summary) - High-level alert overview
+- [Sales Team View](/features/sales-team-view) - Seller performance alerts
+- [Customer Analysis](/features/customer-analysis) - Customer risk detection
+- [Product Analysis](/features/product-analysis) - Product performance alerts

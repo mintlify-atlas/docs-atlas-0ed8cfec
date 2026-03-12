@@ -1,0 +1,169 @@
+---
+title: Excel File Format
+description: Expected Excel file structure, sheets, columns, and data types for Visor KPI Comercial
+---
+
+## Overview
+
+The Visor KPI Comercial application expects data in a multi-sheet Excel file located at `data/raw/mock_data.xlsx`. The file must contain five sheets with specific column schemas and data types.
+
+<Note>
+If the data file is missing, run the mock data generator first:
+```bash
+python data/mock/generate_mock_data.py
+```
+</Note>
+
+## File Structure
+
+The Excel file must contain exactly five sheets:
+- **Ventas** - Sales transactions
+- **Vendedores** - Salespeople master data
+- **Clientes** - Customer master data  
+- **Productos** - Product catalog
+- **Objetivos** - Monthly sales targets
+
+## Sheet Schemas
+
+### Ventas (Sales)
+
+Contains individual sales transactions.
+
+| Column | Data Type | Description | Validation |
+|--------|-----------|-------------|------------|
+| `id_venta` | String | Unique transaction ID (e.g., VTA000001) | Required, unique |
+| `fecha` | DateTime | Transaction date | Required, parsed with `pd.to_datetime()` |
+| `id_vendedor` | String | Salesperson ID (e.g., V001) | Required, FK to Vendedores |
+| `id_cliente` | String | Customer ID (e.g., CLI001) | Required, FK to Clientes |
+| `id_producto` | String | Product ID (e.g., PRD001) | Required, FK to Productos |
+| `cantidad` | Integer | Quantity sold | Required, must be > 0 |
+| `precio_unitario` | Float | Unit price | Converted with `pd.to_numeric()`, filled with 0 |
+| `descuento_pct` | Float | Discount percentage (0.00-1.00) | Converted with `pd.to_numeric()`, filled with 0 |
+| `importe_bruto` | Float | Gross amount (before discount) | Converted with `pd.to_numeric()`, filled with 0 |
+| `importe_neto` | Float | Net amount (after discount) | Converted with `pd.to_numeric()`, filled with 0 |
+
+**Derived columns** (added by data_loader):
+- `año` - Year extracted from `fecha`
+- `mes` - Month (1-12) extracted from `fecha`
+- `periodo` - Period object (YYYY-MM)
+
+### Vendedores (Salespeople)
+
+Master data for sales team members.
+
+| Column | Data Type | Description | Validation |
+|--------|-----------|-------------|------------|
+| `id_vendedor` | String | Unique salesperson ID (e.g., V001) | Required, unique |
+| `nombre_completo` | String | Full name | Required |
+| `zona` | String | Sales zone | Must be one of: GBA Norte, GBA Sur, Interior |
+| `perfil` | String | Performance profile | One of: estrella, estable, desarrollo, problematico |
+| `objetivo_mensual_base` | Float | Base monthly target | Converted with `pd.to_numeric()` |
+| `antiguedad_años` | Integer | Tenure in years | Converted with `pd.to_numeric()` |
+| `supervisor_id` | String | Supervisor ID | Optional |
+| `activo` | Boolean | Active status | Converted to `bool` |
+
+### Clientes (Customers)
+
+Customer master data.
+
+| Column | Data Type | Description | Validation |
+|--------|-----------|-------------|------------|
+| `id_cliente` | String | Unique customer ID (e.g., CLI001) | Required, unique |
+| `razon_social` | String | Company/business name | Required |
+| `canal` | String | Sales channel | Must be one of: Canal Tradicional, Supermercadismo, Mayorista, HoReCa |
+| `zona` | String | Geographic zone | Must be one of: GBA Norte, GBA Sur, Interior |
+| `id_vendedor_asignado` | String | Assigned salesperson ID | Required, FK to Vendedores |
+| `objetivo_mensual_cliente` | Float | Customer monthly target | Converted with `pd.to_numeric()` |
+| `fecha_alta` | DateTime | Customer registration date | Parsed with `pd.to_datetime()` |
+| `activo` | Boolean | Active status | Converted to `bool` |
+| `categoria_pareto` | String | Pareto category (A/B/C) | Optional, can be calculated |
+
+### Productos (Products)
+
+Product catalog.
+
+| Column | Data Type | Description | Validation |
+|--------|-----------|-------------|------------|
+| `id_producto` | String | Unique product ID (e.g., PRD001) | Required, unique |
+| `descripcion` | String | Product description | Required |
+| `categoria` | String | Product category | One of: Lácteos, Almacén, Bebidas, Limpieza, Perfumería |
+| `precio_unitario` | Float | Catalog unit price | Converted with `pd.to_numeric()` |
+| `costo_unitario` | Float | Unit cost | Converted with `pd.to_numeric()` |
+| `unidad_medida` | String | Unit of measure | E.g., unidad, caja, kg |
+| `activo` | Boolean | Active status | Converted to `bool` |
+
+### Objetivos (Targets)
+
+Monthly sales targets by salesperson.
+
+| Column | Data Type | Description | Validation |
+|--------|-----------|-------------|------------|
+| `id_vendedor` | String | Salesperson ID | Required, FK to Vendedores |
+| `año` | Integer | Target year | Required |
+| `mes` | Integer | Target month (1-12) | Required |
+| `periodo` | DateTime | Period date (first day of month) | Created from año/mes or parsed directly |
+| `objetivo` | Float | Target amount | Converted with `pd.to_numeric()`, filled with 0 |
+
+## Data Type Conversions
+
+The `load_data()` function applies these conversions automatically:
+
+```python
+# Numeric fields - coerce errors to NaN, then fill with 0
+for col in ["importe_neto", "importe_bruto", "cantidad", "precio_unitario", "descuento_pct"]:
+    ventas[col] = pd.to_numeric(ventas[col], errors="coerce").fillna(0)
+
+# Boolean fields
+vendedores["activo"] = vendedores["activo"].astype(bool)
+
+# DateTime fields
+ventas["fecha"] = pd.to_datetime(ventas["fecha"])
+clientes["fecha_alta"] = pd.to_datetime(clientes["fecha_alta"])
+```
+
+## Validation Rules
+
+<AccordionGroup>
+  <Accordion title="Required Fields">
+    All primary keys (`id_*` columns) and foreign keys must be present and non-null.
+    
+    Critical fields that cannot be null:
+    - `Ventas`: id_venta, fecha, id_vendedor, id_cliente, id_producto, importe_neto
+    - `Vendedores`: id_vendedor, nombre_completo, activo
+    - `Clientes`: id_cliente, razon_social, id_vendedor_asignado, activo
+    - `Productos`: id_producto, descripcion, activo
+    - `Objetivos`: id_vendedor, año, mes, objetivo
+  </Accordion>
+
+  <Accordion title="Referential Integrity">
+    Foreign key relationships must be valid:
+    - `Ventas.id_vendedor` → `Vendedores.id_vendedor`
+    - `Ventas.id_cliente` → `Clientes.id_cliente`
+    - `Ventas.id_producto` → `Productos.id_producto`
+    - `Clientes.id_vendedor_asignado` → `Vendedores.id_vendedor`
+    - `Objetivos.id_vendedor` → `Vendedores.id_vendedor`
+  </Accordion>
+
+  <Accordion title="Business Rules">
+    - `descuento_pct` must be between 0.00 and 1.00
+    - `importe_neto` should equal `importe_bruto * (1 - descuento_pct)`
+    - `cantidad` must be greater than 0
+    - `fecha` should be within the business period (2023-01-01 to 2026-03-31)
+  </Accordion>
+</AccordionGroup>
+
+## File Location
+
+The data file path is defined in `config.py:53`:
+
+```python
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "mock_data.xlsx")
+```
+
+Relative to project root: `data/raw/mock_data.xlsx`
+
+## See Also
+
+- [Data Loader](/data/data-loader) - How the data is loaded and cached
+- [Mock Data Generator](/data/mock-data-generator) - Generate test data
